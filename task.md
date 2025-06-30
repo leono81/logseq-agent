@@ -16,8 +16,8 @@
     - [X] `read_page_content(page_title: str) -> str | None`: Lee el contenido completo de una página.
 - [ ] **Implementar Funciones de Escritura (Write)**
     - [X] `create_page(page_title: str, content: str = "") -> Path`: Crea una nueva página si no existe.
-    - [ ] `append_to_page(page_title: str, content: str, ensure_new_line: bool = True)`: Añade contenido al final de una página.
-    - [ ] `prepend_to_page(page_title: str, content: str, ensure_new_line: bool = True)`: Añade contenido al principio de una página (útil para "inboxes").
+    - [X] `append_to_page(page_title: str, content: str, ensure_new_line: bool = True)`: Añade contenido al final de una página.
+    - [X] `prepend_to_page(page_title: str, content: str, ensure_new_line: bool = True)`: Añade contenido al principio de una página (útil para "inboxes").
 
 ## Fase 2: El Cerebro - Integración de la IA
 
