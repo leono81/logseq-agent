@@ -45,6 +45,20 @@ class SearchInPages(BaseModel):
     )
 
 
+class CreateTask(BaseModel):
+    """
+    Herramienta para crear una nueva tarea (TODO) en una página de Logseq.
+    """
+    page_title: str = Field(
+        ..., 
+        description="El título de la página donde se creará la tarea. Ej: 'Tareas', 'Proyectos/Mi App'"
+    )
+    content: str = Field(
+        ..., 
+        description="La descripción de la tarea a crear. Ej: 'Llamar a mamá', 'Revisar el informe'"
+    )
+
+
 def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     Crea un agente de IA específicamente diseñado para trabajar con Logseq.
@@ -57,27 +71,33 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     agent = Agent(
         'openai:gpt-4.1-mini',
-        output_type=Union[AppendToPage, ReadPageContent, SearchInPages],
+        output_type=Union[AppendToPage, ReadPageContent, SearchInPages, CreateTask],
         system_prompt=(
             "Eres un asistente de IA especializado en Logseq, un sistema de toma de notas basado en bloques. "
             "Tu tarea es interpretar las solicitudes del usuario y convertirlas en acciones específicas de Logseq.\n\n"
-            "Tienes tres herramientas disponibles:\n\n"
-            "1. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, CREAR, ANOTAR o escribir algo nuevo.\n"
-            "   - 'Añade \"Comprar leche\" a mis tareas' → AppendToPage(page_title='Tareas', content='Comprar leche')\n"
+            "Tienes cuatro herramientas disponibles:\n\n"
+            "1. **CreateTask**: Úsala cuando el usuario quiera crear una TAREA, un PENDIENTE o un TODO. Es la opción preferida para acciones.\n"
+            "   - 'Añade la tarea de llamar a mamá' → CreateTask(page_title='Tareas', content='Llamar a mamá')\n"
+            "   - 'TODO: Revisar el informe' → CreateTask(page_title='Tareas', content='Revisar el informe')\n"
+            "   - 'Recordarme comprar leche' → CreateTask(page_title='Tareas', content='Comprar leche')\n"
+            "   - 'Tengo que estudiar para el examen' → CreateTask(page_title='Tareas', content='Estudiar para el examen')\n\n"
+            "2. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas).\n"
             "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
-            "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n\n"
-            "2. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
+            "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n"
+            "   - 'Anota este pensamiento...' → AppendToPage(page_title='Notas', content='[pensamiento]')\n\n"
+            "3. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
             "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
             "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
             "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
             "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
-            "3. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
+            "4. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
             "   - 'Busca mis notas sobre IA' → SearchInPages(query='IA')\n"
             "   - 'Encuentra dónde mencioné el \"Proyecto Apolo\"' → SearchInPages(query='Proyecto Apolo')\n"
             "   - '¿En qué páginas hablo de cocina?' → SearchInPages(query='cocina')\n"
             "   - 'Busca referencias a Python' → SearchInPages(query='Python')\n\n"
             "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
-            "- Si quiere AGREGAR/CREAR → AppendToPage\n"
+            "- Si quiere crear una TAREA/TODO/PENDIENTE → CreateTask\n"
+            "- Si quiere AGREGAR/ANOTAR contenido general → AppendToPage\n"
             "- Si quiere VER/LEER una página específica → ReadPageContent\n"
             "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n\n"
             "Si el usuario no especifica una página, usa una página lógica basada en el contexto:\n"
@@ -188,7 +208,17 @@ def main():
                     result = ai_agent.run_sync(prompt)
                     
                     # Verificar que el resultado sea del tipo esperado
-                    if isinstance(result.output, AppendToPage):
+                    if isinstance(result.output, CreateTask):
+                        task_action = result.output
+                        # Formatear el contenido como una tarea TODO
+                        task_content = f"TODO {task_action.content}"
+                        logseq_manager.append_to_page(
+                            page_title=task_action.page_title,
+                            content=task_content
+                        )
+                        print(f"✅ ¡Tarea creada! Se añadió '{task_content}' a la página '{task_action.page_title}'.")
+                        
+                    elif isinstance(result.output, AppendToPage):
                         append_action = result.output
                         
                         # Ejecutar la acción usando nuestro LogseqManager
@@ -224,7 +254,7 @@ def main():
                             
                     else:
                         print("❌ Lo siento, no pude entender ese comando. ¿Podrías reformularlo?")
-                        print("💡 Intenta con algo como: 'Añade [tarea] a [página]', '¿Qué hay en [página]?' o 'Busca [término]'")
+                        print("💡 Intenta con algo como: 'Crear tarea: [descripción]', 'Añade [nota] a [página]', '¿Qué hay en [página]?' o 'Busca [término]'")
                 
                 print()  # Línea en blanco para separar comandos
                 
