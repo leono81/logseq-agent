@@ -35,6 +35,16 @@ class ReadPageContent(BaseModel):
     )
 
 
+class SearchInPages(BaseModel):
+    """
+    Herramienta para buscar un término en TODAS las páginas de Logseq.
+    """
+    query: str = Field(
+        ..., 
+        description="El término de búsqueda. Ej: 'Inteligencia Artificial', 'receta de cocina'"
+    )
+
+
 def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     Crea un agente de IA específicamente diseñado para trabajar con Logseq.
@@ -47,23 +57,29 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     agent = Agent(
         'openai:gpt-4.1-mini',
-        output_type=Union[AppendToPage, ReadPageContent],
+        output_type=Union[AppendToPage, ReadPageContent, SearchInPages],
         system_prompt=(
             "Eres un asistente de IA especializado en Logseq, un sistema de toma de notas basado en bloques. "
             "Tu tarea es interpretar las solicitudes del usuario y convertirlas en acciones específicas de Logseq.\n\n"
-            "Tienes dos herramientas disponibles:\n\n"
+            "Tienes tres herramientas disponibles:\n\n"
             "1. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, CREAR, ANOTAR o escribir algo nuevo.\n"
             "   - 'Añade \"Comprar leche\" a mis tareas' → AppendToPage(page_title='Tareas', content='Comprar leche')\n"
             "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
             "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n\n"
-            "2. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página.\n"
+            "2. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
             "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
             "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
             "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
             "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
+            "3. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
+            "   - 'Busca mis notas sobre IA' → SearchInPages(query='IA')\n"
+            "   - 'Encuentra dónde mencioné el \"Proyecto Apolo\"' → SearchInPages(query='Proyecto Apolo')\n"
+            "   - '¿En qué páginas hablo de cocina?' → SearchInPages(query='cocina')\n"
+            "   - 'Busca referencias a Python' → SearchInPages(query='Python')\n\n"
             "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
             "- Si quiere AGREGAR/CREAR → AppendToPage\n"
-            "- Si quiere VER/LEER → ReadPageContent\n\n"
+            "- Si quiere VER/LEER una página específica → ReadPageContent\n"
+            "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n\n"
             "Si el usuario no especifica una página, usa una página lógica basada en el contexto:\n"
             "- Tareas/TODOs → 'Tareas'\n"
             "- Ideas/pensamientos → 'Ideas'\n"
@@ -195,9 +211,20 @@ def main():
                         else:
                             print(f"❌ La página '{read_action.page_title}' no existe o está vacía.")
                             
+                    elif isinstance(result.output, SearchInPages):
+                        search_action = result.output
+                        print(f"🔎 Buscando '{search_action.query}' en todas las páginas...")
+                        results = logseq_manager.search_in_pages(search_action.query)
+                        if results:
+                            print(f"✅ Encontré menciones en las siguientes {len(results)} páginas:")
+                            for page_title in results:
+                                print(f"  - {page_title}")
+                        else:
+                            print(f"❌ No encontré ninguna página que mencione '{search_action.query}'.")
+                            
                     else:
                         print("❌ Lo siento, no pude entender ese comando. ¿Podrías reformularlo?")
-                        print("💡 Intenta con algo como: 'Añade [tarea] a [página]' o '¿Qué hay en [página]?'")
+                        print("💡 Intenta con algo como: 'Añade [tarea] a [página]', '¿Qué hay en [página]?' o 'Busca [término]'")
                 
                 print()  # Línea en blanco para separar comandos
                 

@@ -188,4 +188,53 @@ class LogseqManager:
             
             # Obtener la ruta del archivo y sobrescribir
             page_path = self._get_page_path(page_title)
-            page_path.write_text(new_content, encoding='utf-8') 
+            page_path.write_text(new_content, encoding='utf-8')
+
+    def search_in_pages(self, query: str) -> list[str]:
+        """
+        Busca una cadena de texto en todas las páginas del grafo de Logseq.
+        
+        Realiza una búsqueda insensible a mayúsculas a través de todo el contenido
+        de las páginas y devuelve una lista de títulos de páginas que contienen
+        la cadena buscada.
+        
+        Args:
+            query: Cadena de texto a buscar en las páginas
+            
+        Returns:
+            Lista de títulos de páginas que contienen la query. 
+            Lista vacía si no se encuentra nada.
+            
+        Example:
+            Si busco "python" y se encuentra en "Ideas__Aprender.md" y "Proyectos__AgenteIA.md",
+            devuelve ['Ideas/Aprender', 'Proyectos/AgenteIA']
+        """
+        # Lista para almacenar los títulos de páginas que contienen la query
+        found_pages = []
+        
+        # Convertir la query a minúsculas para búsqueda insensible a mayúsculas
+        query_lower = query.lower()
+        
+        # Iterar sobre todos los archivos .md en el directorio de páginas
+        for page_file in self.pages_path.glob("*.md"):
+            try:
+                # Leer el contenido del archivo
+                content = page_file.read_text(encoding='utf-8')
+                
+                # Verificar si la query existe en el contenido (insensible a mayúsculas)
+                if query_lower in content.lower():
+                    # Obtener el nombre del archivo sin la extensión .md
+                    page_name = page_file.stem
+                    
+                    # Convertir de vuelta al formato legible: reemplazar __ por /
+                    readable_title = page_name.replace("__", "/")
+                    
+                    # Añadir a la lista de resultados
+                    found_pages.append(readable_title)
+                    
+            except (IOError, OSError, UnicodeDecodeError):
+                # Si hay error leyendo el archivo (permisos, encoding, etc.),
+                # simplemente omitir este archivo y continuar con el siguiente
+                continue
+        
+        return found_pages
