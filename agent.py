@@ -1,6 +1,7 @@
 import os
 import dotenv
 import openai
+import logfire
 from typing import Union
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
@@ -87,6 +88,9 @@ def initialize_agent():
     # Cargar variables de entorno desde .env
     dotenv.load_dotenv()
     
+    # Configurar Logfire para observabilidad
+    logfire.configure()
+    
     # Obtener variables de entorno requeridas
     graph_path = os.getenv('LOGSEQ_GRAPH_PATH')
     openai_api_key = os.getenv('OPENAI_API_KEY')
@@ -108,6 +112,9 @@ def initialize_agent():
     
     # Instanciar el cliente de OpenAI
     openai_client = openai.OpenAI(api_key=openai_api_key)
+    
+    # Instrumentar PydanticAI con Logfire para observabilidad completa
+    logfire.instrument_pydantic_ai()
     
     # Instanciar nuestro gestor de Logseq
     logseq_manager = LogseqManager(graph_path=graph_path)
@@ -159,37 +166,38 @@ def main():
                     print("👋 ¡Hasta la vista! Agente desconectado.")
                     break
                 
-                # Usar el agente para interpretar el comando
+                # Usar el agente para interpretar el comando con observabilidad
                 print("🤔 Interpretando comando...")
-                result = ai_agent.run_sync(prompt)
-                
-                # Verificar que el resultado sea del tipo esperado
-                if isinstance(result.output, AppendToPage):
-                    append_action = result.output
+                with logfire.span("procesando_comando: {prompt}", prompt=prompt):
+                    result = ai_agent.run_sync(prompt)
                     
-                    # Ejecutar la acción usando nuestro LogseqManager
-                    logseq_manager.append_to_page(
-                        page_title=append_action.page_title, 
-                        content=append_action.content
-                    )
-                    
-                    # Confirmar éxito
-                    print(f"✅ ¡Hecho! Se añadió '{append_action.content}' a la página '{append_action.page_title}'.")
-                    
-                elif isinstance(result.output, ReadPageContent):
-                    read_action = result.output
-                    print(f"🔎 Leyendo el contenido de la página '{read_action.page_title}'...")
-                    content = logseq_manager.read_page_content(read_action.page_title)
-                    if content:
-                        print("\n--- Contenido de la Página ---")
-                        print(content)
-                        print("---------------------------\n")
-                    else:
-                        print(f"❌ La página '{read_action.page_title}' no existe o está vacía.")
+                    # Verificar que el resultado sea del tipo esperado
+                    if isinstance(result.output, AppendToPage):
+                        append_action = result.output
                         
-                else:
-                    print("❌ Lo siento, no pude entender ese comando. ¿Podrías reformularlo?")
-                    print("💡 Intenta con algo como: 'Añade [tarea] a [página]' o '¿Qué hay en [página]?'")
+                        # Ejecutar la acción usando nuestro LogseqManager
+                        logseq_manager.append_to_page(
+                            page_title=append_action.page_title, 
+                            content=append_action.content
+                        )
+                        
+                        # Confirmar éxito
+                        print(f"✅ ¡Hecho! Se añadió '{append_action.content}' a la página '{append_action.page_title}'.")
+                        
+                    elif isinstance(result.output, ReadPageContent):
+                        read_action = result.output
+                        print(f"🔎 Leyendo el contenido de la página '{read_action.page_title}'...")
+                        content = logseq_manager.read_page_content(read_action.page_title)
+                        if content:
+                            print("\n--- Contenido de la Página ---")
+                            print(content)
+                            print("---------------------------\n")
+                        else:
+                            print(f"❌ La página '{read_action.page_title}' no existe o está vacía.")
+                            
+                    else:
+                        print("❌ Lo siento, no pude entender ese comando. ¿Podrías reformularlo?")
+                        print("💡 Intenta con algo como: 'Añade [tarea] a [página]' o '¿Qué hay en [página]?'")
                 
                 print()  # Línea en blanco para separar comandos
                 
