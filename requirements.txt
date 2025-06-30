@@ -1,0 +1,10 @@
+# Dependencias principales para el agente IA de Logseq
+pydantic
+openai
+logfire
+
+# Manejo de variables de entorno
+python-dotenv
+
+# Utilidades para desarrollo y testing (futuras)
+pytest 
