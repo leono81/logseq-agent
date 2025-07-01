@@ -9,6 +9,11 @@ TEST_APPEND_PAGE_NAME = "página-para-append-test"
 TEST_APPEND_NEW_PAGE_NAME = "página-nueva-con-append"
 TEST_PREPEND_PAGE_NAME = "página-para-prepend-test"
 TEST_PREPEND_NEW_PAGE_NAME = "página-nueva-con-prepend"
+TEST_BLOCK_SEARCH_PAGE_NAME = "página-para-buscar-bloques"
+TEST_BLOCK_EMPTY_PAGE_NAME = "página-vacía-para-bloques"
+TEST_UPDATE_PAGE_NAME = "página-para-actualizar-bloques"
+TEST_UPDATE_EMPTY_PAGE_NAME = "página-vacía-para-actualizar"
+TEST_UPDATE_MULTIPLE_PAGE_NAME = "página-con-bloques-múltiples"
 
 
 def run_write_tests(manager):
@@ -196,6 +201,329 @@ def run_write_tests(manager):
     return write_tests_passed, total_write_tests
 
 
+def run_block_tests(manager):
+    """
+    Ejecuta pruebas para la función find_block_in_page del LogseqManager.
+    Incluye limpieza automática de archivos de prueba.
+    """
+    print("\n=== Pruebas de find_block_in_page ===")
+    
+    block_tests_passed = 0
+    total_block_tests = 7  # Total de pruebas de bloques
+    
+    try:
+        # === PREPARACIÓN: Crear páginas de prueba ===
+        print(f"📝 Preparando páginas de prueba para búsqueda de bloques...")
+        
+        # Página con varios bloques de prueba
+        test_blocks_content = """- Comprar papel higiénico
+- Llamar al médico para cita
+- Revisar correos electrónicos
+- Estudiar Python para el proyecto
+- Hacer ejercicio en el gimnasio"""
+        
+        manager.create_page(TEST_BLOCK_SEARCH_PAGE_NAME, content=test_blocks_content)
+        
+        # Página vacía para pruebas
+        manager.create_page(TEST_BLOCK_EMPTY_PAGE_NAME, content="")
+        
+        print(f"   ✅ Páginas de prueba creadas")
+        
+        # === PRUEBA 1: Buscar bloque existente ===
+        print(f"🔍 Prueba 1: Buscar bloque existente 'Comprar papel higiénico'...")
+        found_1 = manager.find_block_in_page(TEST_BLOCK_SEARCH_PAGE_NAME, "Comprar papel higiénico")
+        if found_1:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: Bloque encontrado correctamente")
+        else:
+            print(f"   ❌ FALLO: Bloque no encontrado cuando debería existir")
+        
+        # === PRUEBA 2: Buscar otro bloque existente ===
+        print(f"🔍 Prueba 2: Buscar bloque existente 'Estudiar Python para el proyecto'...")
+        found_2 = manager.find_block_in_page(TEST_BLOCK_SEARCH_PAGE_NAME, "Estudiar Python para el proyecto")
+        if found_2:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: Segundo bloque encontrado correctamente")
+        else:
+            print(f"   ❌ FALLO: Segundo bloque no encontrado cuando debería existir")
+        
+        # === PRUEBA 3: Buscar bloque inexistente ===
+        print(f"🔍 Prueba 3: Buscar bloque inexistente 'Lavar el auto'...")
+        found_3 = manager.find_block_in_page(TEST_BLOCK_SEARCH_PAGE_NAME, "Lavar el auto")
+        if not found_3:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: Bloque inexistente no encontrado (correcto)")
+        else:
+            print(f"   ❌ FALLO: Bloque inexistente fue encontrado incorrectamente")
+        
+        # === PRUEBA 4: Buscar contenido parcial (no debe encontrar) ===
+        print(f"🔍 Prueba 4: Buscar contenido parcial 'Comprar papel' (debe fallar)...")
+        found_4 = manager.find_block_in_page(TEST_BLOCK_SEARCH_PAGE_NAME, "Comprar papel")
+        if not found_4:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: Búsqueda parcial no encontró nada (correcto)")
+        else:
+            print(f"   ❌ FALLO: Búsqueda parcial encontró algo incorrectamente")
+        
+        # === PRUEBA 5: Buscar en página vacía ===
+        print(f"🔍 Prueba 5: Buscar en página vacía...")
+        found_5 = manager.find_block_in_page(TEST_BLOCK_EMPTY_PAGE_NAME, "Cualquier cosa")
+        if not found_5:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: No encontró nada en página vacía (correcto)")
+        else:
+            print(f"   ❌ FALLO: Encontró algo en página vacía incorrectamente")
+        
+        # === PRUEBA 6: Buscar en página inexistente ===
+        print(f"🔍 Prueba 6: Buscar en página inexistente...")
+        found_6 = manager.find_block_in_page("PÁGINA-QUE-NO-EXISTE", "Cualquier contenido")
+        if not found_6:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: No encontró nada en página inexistente (correcto)")
+        else:
+            print(f"   ❌ FALLO: Encontró algo en página inexistente incorrectamente")
+        
+        # === PRUEBA 7: Buscar con espacios adicionales (debe ser resiliente) ===
+        print(f"🔍 Prueba 7: Verificar resilencia a espacios...")
+        # Crear una página con espacios extras en los bloques
+        content_with_spaces = "- Tarea con espacios   \n-    Otra tarea con espacios al inicio"
+        manager.create_page("página-espacios-test", content=content_with_spaces)
+        
+        found_7 = manager.find_block_in_page("página-espacios-test", "Tarea con espacios")
+        if found_7:
+            block_tests_passed += 1
+            print(f"   ✅ ÉXITO: Encontró bloque a pesar de espacios extra")
+        else:
+            print(f"   ❌ FALLO: No pudo manejar espacios extra correctamente")
+        
+    except Exception as e:
+        print(f"   ❌ ERROR durante las pruebas de bloques: {e}")
+    
+    finally:
+        # === LIMPIEZA ===
+        print(f"\n🧹 Limpiando archivos de prueba de bloques...")
+        
+        # Lista de páginas de prueba a limpiar
+        test_pages = [
+            TEST_BLOCK_SEARCH_PAGE_NAME,
+            TEST_BLOCK_EMPTY_PAGE_NAME,
+            "página-espacios-test"
+        ]
+        cleaned_count = 0
+        
+        for test_page in test_pages:
+            if manager.page_exists(test_page):
+                try:
+                    test_page_path = manager._get_page_path(test_page)
+                    os.remove(test_page_path)
+                    print(f"   ✅ Archivo eliminado: {test_page_path}")
+                    cleaned_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ No se pudo eliminar {test_page}: {e}")
+        
+        if cleaned_count == 0:
+            print(f"   ℹ️ No había archivos de prueba de bloques para eliminar")
+        else:
+            print(f"   🎯 Total de archivos de prueba de bloques eliminados: {cleaned_count}")
+    
+    # Imprimir resumen de pruebas de bloques
+    print(f"\n=== RESUMEN DE PRUEBAS DE BLOQUES ===")
+    print(f"🎯 Pruebas de bloques: {block_tests_passed}/{total_block_tests} pasaron")
+    
+    if block_tests_passed == total_block_tests:
+        print("🎉 ¡Todas las pruebas de bloques pasaron!")
+    else:
+        print("⚠️ Algunas pruebas de bloques fallaron.")
+    
+    return block_tests_passed, total_block_tests
+
+
+def run_update_tests(manager):
+    """
+    Ejecuta pruebas para la función update_block_in_page del LogseqManager.
+    Incluye limpieza automática de archivos de prueba.
+    """
+    print("\n=== Pruebas de update_block_in_page ===")
+    
+    update_tests_passed = 0
+    total_update_tests = 6  # Total de pruebas de actualización
+    
+    try:
+        # === PREPARACIÓN: Crear páginas de prueba ===
+        print(f"📝 Preparando páginas de prueba para actualización de bloques...")
+        
+        # Página con varios bloques de prueba para actualización
+        original_content = """- Tarea pendiente original
+- Llamar al médico mañana
+- Estudiar Python avanzado
+- Hacer ejercicio regularmente
+- Revisar correos importantes"""
+        
+        manager.create_page(TEST_UPDATE_PAGE_NAME, content=original_content)
+        
+        # Página vacía para pruebas
+        manager.create_page(TEST_UPDATE_EMPTY_PAGE_NAME, content="")
+        
+        # Página con bloques duplicados para probar actualización selectiva
+        duplicate_content = """- Tarea duplicada
+- Otra tarea diferente
+- Tarea duplicada
+- Una más distinta"""
+        
+        manager.create_page(TEST_UPDATE_MULTIPLE_PAGE_NAME, content=duplicate_content)
+        
+        print(f"   ✅ Páginas de prueba creadas")
+        
+        # === PRUEBA 1: Actualizar bloque existente ===
+        print(f"🔄 Prueba 1: Actualizar bloque existente 'Tarea pendiente original'...")
+        success_1 = manager.update_block_in_page(
+            TEST_UPDATE_PAGE_NAME, 
+            "Tarea pendiente original", 
+            "Tarea completada y actualizada"
+        )
+        if success_1:
+            # Verificar que el contenido se actualizó correctamente
+            updated_content = manager.read_page_content(TEST_UPDATE_PAGE_NAME)
+            if "- Tarea completada y actualizada" in updated_content and "Tarea pendiente original" not in updated_content:
+                update_tests_passed += 1
+                print(f"   ✅ ÉXITO: Bloque actualizado correctamente")
+            else:
+                print(f"   ❌ FALLO: El contenido no se actualizó como se esperaba")
+                print(f"   📄 Contenido actual: {repr(updated_content[:200])}")
+        else:
+            print(f"   ❌ FALLO: La función reportó que no se pudo actualizar el bloque")
+        
+        # === PRUEBA 2: Intentar actualizar bloque inexistente ===
+        print(f"🔄 Prueba 2: Intentar actualizar bloque inexistente 'Bloque que no existe'...")
+        success_2 = manager.update_block_in_page(
+            TEST_UPDATE_PAGE_NAME, 
+            "Bloque que no existe", 
+            "Nuevo contenido"
+        )
+        if not success_2:
+            update_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que no encontró el bloque")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para un bloque inexistente")
+        
+        # === PRUEBA 3: Actualizar en página inexistente ===
+        print(f"🔄 Prueba 3: Intentar actualizar en página inexistente...")
+        success_3 = manager.update_block_in_page(
+            "PÁGINA-QUE-NO-EXISTE", 
+            "Cualquier contenido", 
+            "Nuevo contenido"
+        )
+        if not success_3:
+            update_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que la página no existe")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para una página inexistente")
+        
+        # === PRUEBA 4: Actualizar en página vacía ===
+        print(f"🔄 Prueba 4: Intentar actualizar en página vacía...")
+        success_4 = manager.update_block_in_page(
+            TEST_UPDATE_EMPTY_PAGE_NAME, 
+            "Cualquier contenido", 
+            "Nuevo contenido"
+        )
+        if not success_4:
+            update_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que no hay bloques en página vacía")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para una página vacía")
+        
+        # === PRUEBA 5: Verificar que solo actualiza la primera ocurrencia ===
+        print(f"🔄 Prueba 5: Verificar actualización de solo la primera ocurrencia...")
+        success_5 = manager.update_block_in_page(
+            TEST_UPDATE_MULTIPLE_PAGE_NAME, 
+            "Tarea duplicada", 
+            "Primera tarea actualizada"
+        )
+        if success_5:
+            # Verificar que solo se actualizó la primera ocurrencia
+            multiple_content = manager.read_page_content(TEST_UPDATE_MULTIPLE_PAGE_NAME)
+            first_updated = "- Primera tarea actualizada" in multiple_content
+            still_has_duplicate = "- Tarea duplicada" in multiple_content
+            if first_updated and still_has_duplicate:
+                update_tests_passed += 1
+                print(f"   ✅ ÉXITO: Solo actualizó la primera ocurrencia")
+            else:
+                print(f"   ❌ FALLO: No actualizó correctamente solo la primera ocurrencia")
+                print(f"   📄 Contenido: {repr(multiple_content)}")
+        else:
+            print(f"   ❌ FALLO: No pudo actualizar la primera ocurrencia")
+        
+        # === PRUEBA 6: Verificar que el resto del contenido se mantiene intacto ===
+        print(f"🔄 Prueba 6: Verificar que el resto del contenido se mantiene intacto...")
+        # Leer el contenido actual de la página principal después de la primera actualización
+        final_content = manager.read_page_content(TEST_UPDATE_PAGE_NAME)
+        expected_lines = [
+            "- Tarea completada y actualizada",  # Esta fue cambiada
+            "- Llamar al médico mañana",         # Estas deben mantenerse igual
+            "- Estudiar Python avanzado",        
+            "- Hacer ejercicio regularmente",    
+            "- Revisar correos importantes"      
+        ]
+        
+        content_lines = final_content.splitlines()
+        all_lines_correct = True
+        for i, expected_line in enumerate(expected_lines):
+            if i < len(content_lines) and content_lines[i] == expected_line:
+                continue
+            else:
+                all_lines_correct = False
+                break
+        
+        if all_lines_correct and len(content_lines) == len(expected_lines):
+            update_tests_passed += 1
+            print(f"   ✅ ÉXITO: El resto del contenido se mantuvo intacto")
+        else:
+            print(f"   ❌ FALLO: El contenido no se mantuvo como se esperaba")
+            print(f"   📄 Esperado: {expected_lines}")
+            print(f"   📄 Obtenido: {content_lines}")
+        
+    except Exception as e:
+        print(f"   ❌ ERROR durante las pruebas de actualización: {e}")
+    
+    finally:
+        # === LIMPIEZA ===
+        print(f"\n🧹 Limpiando archivos de prueba de actualización...")
+        
+        # Lista de páginas de prueba a limpiar
+        test_pages = [
+            TEST_UPDATE_PAGE_NAME,
+            TEST_UPDATE_EMPTY_PAGE_NAME,
+            TEST_UPDATE_MULTIPLE_PAGE_NAME
+        ]
+        cleaned_count = 0
+        
+        for test_page in test_pages:
+            if manager.page_exists(test_page):
+                try:
+                    test_page_path = manager._get_page_path(test_page)
+                    os.remove(test_page_path)
+                    print(f"   ✅ Archivo eliminado: {test_page_path}")
+                    cleaned_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ No se pudo eliminar {test_page}: {e}")
+        
+        if cleaned_count == 0:
+            print(f"   ℹ️ No había archivos de prueba de actualización para eliminar")
+        else:
+            print(f"   🎯 Total de archivos de prueba de actualización eliminados: {cleaned_count}")
+    
+    # Imprimir resumen de pruebas de actualización
+    print(f"\n=== RESUMEN DE PRUEBAS DE ACTUALIZACIÓN ===")
+    print(f"🎯 Pruebas de actualización: {update_tests_passed}/{total_update_tests} pasaron")
+    
+    if update_tests_passed == total_update_tests:
+        print("🎉 ¡Todas las pruebas de actualización pasaron!")
+    else:
+        print("⚠️ Algunas pruebas de actualización fallaron.")
+    
+    return update_tests_passed, total_update_tests
+
+
 def main():
     """
     Script de prueba para verificar las funcionalidades de lectura y escritura del LogseqManager.
@@ -335,21 +663,31 @@ def main():
         # === PRUEBAS DE ESCRITURA ===
         write_passed, write_total = run_write_tests(manager)
         
+        # === PRUEBAS DE BLOQUES ===
+        block_passed, block_total = run_block_tests(manager)
+        
+        # === PRUEBAS DE ACTUALIZACIÓN ===
+        update_passed, update_total = run_update_tests(manager)
+        
         # === RESUMEN FINAL ===
-        total_all_tests = total_tests + write_total
-        total_all_passed = passed_tests + write_passed
+        total_all_tests = total_tests + write_total + block_total + update_total
+        total_all_passed = passed_tests + write_passed + block_passed + update_passed
         
         print(f"\n{'='*50}")
         print(f"🎯 RESUMEN FINAL DE TODAS LAS PRUEBAS")
         print(f"{'='*50}")
         print(f"📖 Pruebas de lectura: {passed_tests}/{total_tests}")
         print(f"📝 Pruebas de escritura: {write_passed}/{write_total}")
+        print(f"🔍 Pruebas de bloques: {block_passed}/{block_total}")
+        print(f"🔄 Pruebas de actualización: {update_passed}/{update_total}")
         print(f"🎯 TOTAL: {total_all_passed}/{total_all_tests} pruebas pasaron")
         
         if total_all_passed == total_all_tests:
             print("🎉 ¡ÉXITO TOTAL! Todas las pruebas pasaron.")
             print("🏆 FASE 1 COMPLETADA: LogseqManager funciona perfectamente.")
-            print("🚀 Listo para avanzar a la Fase 2 (integración con IA)!")
+            print("🔍 NUEVA FUNCIONALIDAD: find_block_in_page implementada y probada.")
+            print("🔄 NUEVA FUNCIONALIDAD: update_block_in_page implementada y probada.")
+            print("🚀 Listo para avanzar con más funciones de manejo de bloques!")
         else:
             print("⚠️ Algunas pruebas fallaron. Revisa la implementación o el grafo de Logseq.")
     

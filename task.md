@@ -38,11 +38,11 @@
 
 ## Fase 3: Capacidades Avanzadas
 
-- [ ] **Implementar Búsqueda y Recuperación (RAG)**
-    - [ ] Crear una función en `LogseqManager` para buscar un término en todos los archivos.
-- [ ] **Añadir Herramientas Más Complejas**
-    - [ ] Modelo Pydantic para `CreateTask(BaseModel)` que añada un bloque con `[TODO]`.
-    - [ ] Modelo Pydantic para `FindInLogseq(BaseModel)` que use la función de búsqueda.
+- [X] **Implementar Búsqueda y Recuperación (RAG)**
+    - [X] Crear una función en `LogseqManager` para buscar un término en todos los archivos.
+- [X] **Añadir Herramientas Más Complejas**
+    - [X] Modelo Pydantic para `CreateTask(BaseModel)` que añada un bloque con `[TODO]`.
+    - [X] Modelo Pydantic para `FindInLogseq(BaseModel)` que use la función de búsqueda.
 - [ ] **Manejo de Bloques Específicos**
     - [ ] Investigar cómo referenciar y editar bloques específicos (puede requerir `uuid` o parseo más complejo).
 - [ ] **Implementar Confirmación de Usuario**

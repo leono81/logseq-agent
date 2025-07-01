@@ -238,3 +238,126 @@ class LogseqManager:
                 continue
         
         return found_pages
+
+    def find_block_in_page(self, page_title: str, block_content: str) -> bool:
+        """
+        Busca un bloque específico de contenido dentro de una página de Logseq.
+        
+        Recorre línea por línea el contenido de la página, removiendo el prefijo 
+        de bloque ("- ") y comparando el contenido limpio con el texto buscado.
+        
+        Args:
+            page_title: Título de la página donde buscar el bloque
+            block_content: Contenido exacto del bloque a buscar (sin el prefijo "- ")
+            
+        Returns:
+            True si encuentra el bloque exacto, False en caso contrario
+            
+        Example:
+            Si una página contiene "- Comprar papel higiénico" y buscamos
+            "Comprar papel higiénico", la función retornará True.
+        """
+        # 1. Verificar si la página existe
+        if not self.page_exists(page_title):
+            return False
+        
+        # 2. Leer el contenido de la página
+        content = self.read_page_content(page_title)
+        if not content:  # Maneja None o cadena vacía
+            return False
+        
+        # 3. Dividir el contenido en líneas (bloques)
+        lines = content.splitlines()
+        
+        # 4. Para cada línea del archivo
+        for line in lines:
+            # a. Quitar el prefijo del bloque ("- ") y espacios en blanco
+            # Primero remover espacios al principio y final
+            cleaned_line = line.strip()
+            
+            # Si la línea comienza con "- ", remover ese prefijo
+            if cleaned_line.startswith("- "):
+                block_text = cleaned_line[2:].strip()  # Remover "- " y espacios adicionales
+                
+                # b. Comprobar si la línea resultante es igual al block_content buscado
+                if block_text == block_content:
+                    # 5. Si encuentra una coincidencia exacta, devolver True
+                    return True
+        
+        # 6. Si recorre todo el archivo y no encuentra nada, devolver False
+        return False
+
+    def update_block_in_page(self, page_title: str, old_content: str, new_content: str) -> bool:
+        """
+        Modifica un bloque específico dentro de una página de Logseq.
+        
+        Realiza una operación de lectura-modificación-escritura para reemplazar
+        exactamente un bloque que coincida con old_content por new_content.
+        
+        Args:
+            page_title: Título de la página donde modificar el bloque
+            old_content: Contenido exacto del bloque a buscar (sin el prefijo "- ")
+            new_content: Nuevo contenido para reemplazar el bloque (sin el prefijo "- ")
+            
+        Returns:
+            True si encontró y modificó el bloque exitosamente, False en caso contrario
+            
+        Example:
+            Si una página contiene "- Comprar papel higiénico" y llamamos
+            update_block_in_page(page, "Comprar papel higiénico", "Comprar papel de baño"),
+            el bloque se cambiará a "- Comprar papel de baño".
+        """
+        # 1. Verificar que la página existe
+        if not self.page_exists(page_title):
+            return False
+        
+        # 2. Leer todo el contenido de la página línea por línea
+        content = self.read_page_content(page_title)
+        if not content:  # Maneja None o cadena vacía
+            return False
+        
+        # Dividir en líneas
+        lines = content.splitlines()
+        
+        # 3. Crear nueva lista para contenido modificado y bandera para saber si se encontró
+        modified_lines = []
+        block_found = False
+        
+        # 4. Iterar sobre cada línea en la lista de líneas originales
+        for line in lines:
+            # a. Limpiar la línea actual (quitando "- " y espacios) para compararla con old_content
+            cleaned_line = line.strip()
+            
+            # Si la línea comienza con "- ", remover ese prefijo para comparar
+            if cleaned_line.startswith("- ") and not block_found:
+                block_text = cleaned_line[2:].strip()  # Remover "- " y espacios adicionales
+                
+                # b. Si la línea limpia coincide con old_content
+                if block_text == old_content:
+                    # i. Marcar block_found = True
+                    block_found = True
+                    # ii. Añadir la nueva línea completa (new_content formateado como bloque)
+                    formatted_new_content = f"- {new_content}"
+                    modified_lines.append(formatted_new_content)
+                else:
+                    # c. Si no coincide: añadir la línea original sin cambios
+                    modified_lines.append(line)
+            else:
+                # c. Si no es un bloque (no empieza con "- ") o ya encontramos el bloque, añadir línea original
+                modified_lines.append(line)
+        
+        # 5. Después del bucle
+        # a. Si block_found es False, no se modificó nada
+        if not block_found:
+            return False
+        
+        # b. Si block_found es True:
+        # i. Unir la lista de contenido modificado en una sola cadena usando \n
+        new_file_content = "\n".join(modified_lines)
+        
+        # ii. Obtener la ruta de la página y sobrescribir el archivo completo
+        page_path = self._get_page_path(page_title)
+        page_path.write_text(new_file_content, encoding='utf-8')
+        
+        # iii. Devolver True para indicar que la operación fue exitosa
+        return True

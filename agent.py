@@ -59,6 +59,20 @@ class CreateTask(BaseModel):
     )
 
 
+class MarkTaskAsDone(BaseModel):
+    """
+    Herramienta para marcar una tarea existente como completada (DONE) en una página.
+    """
+    page_title: str = Field(
+        ..., 
+        description="El título de la página donde está la tarea a marcar como hecha. Ej: 'Tareas'"
+    )
+    task_content: str = Field(
+        ..., 
+        description="El contenido exacto de la tarea a marcar como hecha, sin el 'TODO'. Ej: 'Comprar leche'"
+    )
+
+
 def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     Crea un agente de IA específicamente diseñado para trabajar con Logseq.
@@ -71,32 +85,38 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     agent = Agent(
         'openai:gpt-4.1-mini',
-        output_type=Union[AppendToPage, ReadPageContent, SearchInPages, CreateTask],
+        output_type=Union[AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone],
         system_prompt=(
             "Eres un asistente de IA especializado en Logseq, un sistema de toma de notas basado en bloques. "
             "Tu tarea es interpretar las solicitudes del usuario y convertirlas en acciones específicas de Logseq.\n\n"
-            "Tienes cuatro herramientas disponibles:\n\n"
+            "Tienes cinco herramientas disponibles:\n\n"
             "1. **CreateTask**: Úsala cuando el usuario quiera crear una TAREA, un PENDIENTE o un TODO. Es la opción preferida para acciones.\n"
             "   - 'Añade la tarea de llamar a mamá' → CreateTask(page_title='Tareas', content='Llamar a mamá')\n"
             "   - 'TODO: Revisar el informe' → CreateTask(page_title='Tareas', content='Revisar el informe')\n"
             "   - 'Recordarme comprar leche' → CreateTask(page_title='Tareas', content='Comprar leche')\n"
             "   - 'Tengo que estudiar para el examen' → CreateTask(page_title='Tareas', content='Estudiar para el examen')\n\n"
-            "2. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas).\n"
+            "2. **MarkTaskAsDone**: Úsala cuando el usuario quiera MARCAR COMO HECHA, COMPLETAR o FINALIZAR una tarea existente.\n"
+            "   - 'Marca como hecha la tarea de comprar leche' → MarkTaskAsDone(page_title='Tareas', task_content='Comprar leche')\n"
+            "   - 'Ya he revisado el informe' → MarkTaskAsDone(page_title='Tareas', task_content='Revisar el informe')\n"
+            "   - 'Completé la tarea de llamar al médico' → MarkTaskAsDone(page_title='Tareas', task_content='Llamar al médico')\n"
+            "   - 'Terminé de estudiar para el examen' → MarkTaskAsDone(page_title='Tareas', task_content='Estudiar para el examen')\n\n"
+            "3. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas).\n"
             "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
             "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n"
             "   - 'Anota este pensamiento...' → AppendToPage(page_title='Notas', content='[pensamiento]')\n\n"
-            "3. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
+            "4. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
             "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
             "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
             "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
             "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
-            "4. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
+            "5. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
             "   - 'Busca mis notas sobre IA' → SearchInPages(query='IA')\n"
             "   - 'Encuentra dónde mencioné el \"Proyecto Apolo\"' → SearchInPages(query='Proyecto Apolo')\n"
             "   - '¿En qué páginas hablo de cocina?' → SearchInPages(query='cocina')\n"
             "   - 'Busca referencias a Python' → SearchInPages(query='Python')\n\n"
             "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
             "- Si quiere crear una TAREA/TODO/PENDIENTE → CreateTask\n"
+            "- Si quiere MARCAR COMO HECHA/COMPLETAR/FINALIZAR una tarea existente → MarkTaskAsDone\n"
             "- Si quiere AGREGAR/ANOTAR contenido general → AppendToPage\n"
             "- Si quiere VER/LEER una página específica → ReadPageContent\n"
             "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n\n"
@@ -217,6 +237,26 @@ def main():
                             content=task_content
                         )
                         print(f"✅ ¡Tarea creada! Se añadió '{task_content}' a la página '{task_action.page_title}'.")
+                        
+                    elif isinstance(result.output, MarkTaskAsDone):
+                        action = result.output
+                        print(f"✅ Marcando tarea como hecha en '{action.page_title}'...")
+                        
+                        # Construir el contenido viejo y nuevo del bloque
+                        old_block = f"TODO {action.task_content}"
+                        new_block = f"DONE {action.task_content}"
+                        
+                        # Llamar a nuestro nuevo método del manager
+                        success = logseq_manager.update_block_in_page(
+                            action.page_title,
+                            old_block,
+                            new_block
+                        )
+                        
+                        if success:
+                            print(f"🎉 ¡Tarea completada! Se actualizó '{action.task_content}' en '{action.page_title}'.")
+                        else:
+                            print(f"❌ No pude encontrar la tarea 'TODO {action.task_content}' en la página '{action.page_title}'.")
                         
                     elif isinstance(result.output, AppendToPage):
                         append_action = result.output
