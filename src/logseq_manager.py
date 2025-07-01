@@ -1,6 +1,7 @@
 import os
 import pathlib
 import typing
+from datetime import date
 
 
 class LogseqManager:
@@ -23,6 +24,7 @@ class LogseqManager:
         """
         self.graph_path = pathlib.Path(graph_path)
         self.pages_path = self.graph_path / "pages"
+        self.journals_path = self.graph_path / "journals"
         
         # Verificar que el grafo principal existe y es un directorio
         if not self.graph_path.exists():
@@ -35,6 +37,12 @@ class LogseqManager:
             raise ValueError(f"El directorio 'pages' no existe: {self.pages_path}")
         if not self.pages_path.is_dir():
             raise ValueError(f"El directorio 'pages' no es un directorio: {self.pages_path}")
+            
+        # Verificar que el directorio 'journals' existe y es un directorio
+        if not self.journals_path.exists():
+            raise ValueError(f"El directorio 'journals' no existe: {self.journals_path}")
+        if not self.journals_path.is_dir():
+            raise ValueError(f"El directorio 'journals' no es un directorio: {self.journals_path}")
 
     def _get_page_path(self, page_title: str) -> pathlib.Path:
         """
@@ -361,3 +369,54 @@ class LogseqManager:
         
         # iii. Devolver True para indicar que la operación fue exitosa
         return True
+
+    def append_to_journal(self, content: str, is_task: bool = False, target_date: typing.Optional[date] = None) -> None:
+        """
+        Añade contenido al diario de una fecha específica en Logseq.
+        
+        Esta función automatiza la escritura en la página de diario, 
+        permitiendo especificar una fecha objetivo o usando la fecha actual por defecto.
+        Formatea el contenido según las convenciones de Logseq y escribe directamente 
+        en el directorio /journals en lugar de /pages.
+        
+        Args:
+            content: Contenido a añadir al diario (sin prefijo de bloque)
+            is_task: Si True, el contenido se prefijará con "TODO " para crear una tarea
+            target_date: Fecha específica para el diario. Si es None, usa la fecha actual.
+            
+        Example:
+            append_to_journal("Reunión con equipo de desarrollo")
+            # Añade "- Reunión con equipo de desarrollo" a journals/2025_06_30.md (hoy)
+            
+            append_to_journal("Revisar documentación", is_task=True)
+            # Añade "- TODO Revisar documentación" a journals/2025_06_30.md (hoy)
+            
+            from datetime import date
+            yesterday = date(2025, 6, 29)
+            append_to_journal("Nota del día anterior", target_date=yesterday)
+            # Añade "- Nota del día anterior" a journals/2025_06_29.md
+        """
+        # 1. Obtener la fecha objetivo (hoy si no se especifica)
+        if target_date is None:
+            target_date = date.today()
+        
+        # 2. Formatear el nombre del archivo del diario según convención de Logseq: YYYY_MM_DD
+        journal_filename = target_date.strftime("%Y_%m_%d")
+        
+        # 3. Construir la ruta completa al archivo del diario usando self.journals_path
+        journal_path = self.journals_path / f"{journal_filename}.md"
+        
+        # 4. Formatear el contenido según si es tarea o no
+        if is_task:
+            formatted_content = f"- TODO {content}"
+        else:
+            formatted_content = f"- {content}"
+        
+        # 5. Comprobar si el archivo del diario ya existe
+        if not journal_path.exists():
+            # 6. Si no existe, crearlo con el contenido formateado (sin \n inicial)
+            journal_path.write_text(formatted_content, encoding='utf-8')
+        else:
+            # 7. Si ya existe, abrirlo en modo de adición y añadir el nuevo contenido con salto de línea inicial
+            with open(journal_path, 'a', encoding='utf-8') as file:
+                file.write(f"\n{formatted_content}")

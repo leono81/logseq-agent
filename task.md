@@ -43,10 +43,10 @@
 - [X] **Añadir Herramientas Más Complejas**
     - [X] Modelo Pydantic para `CreateTask(BaseModel)` que añada un bloque con `[TODO]`.
     - [X] Modelo Pydantic para `FindInLogseq(BaseModel)` que use la función de búsqueda.
-- [ ] **Manejo de Bloques Específicos**
-    - [ ] Investigar cómo referenciar y editar bloques específicos (puede requerir `uuid` o parseo más complejo).
-- [ ] **Implementar Confirmación de Usuario**
-    - [ ] Añadir un paso de confirmación antes de ejecutar acciones de escritura o borrado.
+- [X] **Manejo de Bloques Específicos**
+    - [X] Investigar cómo referenciar y editar bloques específicos (puede requerir `uuid` o parseo más complejo).
+- [X] **Implementar Confirmación de Usuario**
+    - [X] Añadir un paso de confirmación antes de ejecutar acciones de escritura o borrado.
 
 ## Fase 4: Observabilidad y Pulido
 
@@ -56,3 +56,28 @@
     - [X] Añadir spans personalizados a nuestras funciones clave en `LogseqManager` y `agent.py`.
 - [X] **Crear una Interfaz de Usuario (CLI)**
     - [X] Usar `argparse` o `typer` para crear una interfaz de línea de comandos simple para interactuar con el agente.
+
+## Fase 5: El Agente de Flujo Diario
+- [X] **Herramienta de Diario Inteligente (`SaveToJournal`)**
+    - [X] `LogseqManager`: Evolucionar `append_to_journal` para aceptar fechas.
+    - [X] `Agent`: Evolucionar `SaveToJournal` para manejar fechas.
+    - [X] `Agent`: Inyectar la fecha actual en el `system_prompt` para dar conciencia temporal.
+- [ ] **Herramienta de Eliminación Segura (`DeleteBlock`)**
+    - [ ] `LogseqManager`: Crear `delete_block_from_page(page_title, content)`.
+    - [ ] `Agent`: Crear la herramienta `DeleteBlock`, protegida con confirmación.
+
+## Fase 6: El Agente Estructurado (Gestión de Conocimiento)
+- [ ] **Herramienta de Contactos (`CreatePerson`)**
+    - [ ] `Agent`: Crear la herramienta `CreatePerson(name, email, phone)`.
+    - [ ] Esta herramienta usará `create_page` y `append_to_page` para construir una página de persona con una plantilla de propiedades.
+- [ ] **Herramienta de Agenda (`ScheduleMeeting`)**
+    - [ ] `Agent`: Crear la herramienta `ScheduleMeeting(topic, date, attendees)`.
+    - [ ] Esta herramienta construirá un bloque estructurado con `SCHEDULED::` y enlaces a los participantes.
+- [ ] **Herramienta de Metadatos (`SetBlockProperty`)**
+    - [ ] `LogseqManager`: Crear `set_property_on_block(page_title, block_content, key, value)`.
+    - [ ] `Agent`: Crear la herramienta `SetBlockProperty` de uso general.
+
+## Fase 7: El Agente Outliner Definitivo
+- [ ] **Herramienta de Anidación (`AddNestedBlock`)**
+    - [ ] `LogseqManager`: Crear la compleja función `add_nested_block(...)`.
+    - [ ] `Agent`: Crear la herramienta `AddNestedBlock` e integrarla.

@@ -1,7 +1,9 @@
 import os
+import typing
 import dotenv
 import openai
 import logfire
+from datetime import date
 from typing import Union
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent
@@ -73,6 +75,24 @@ class MarkTaskAsDone(BaseModel):
     )
 
 
+class SaveToJournal(BaseModel):
+    """
+    Añade un bloque de contenido al final de la página del diario en una fecha específica.
+    """
+    content: str = Field(
+        ..., 
+        description="El contenido a añadir al diario"
+    )
+    is_task: bool = Field(
+        False, 
+        description="Poner en True si el contenido es una tarea."
+    )
+    target_date: typing.Optional[str] = Field(
+        None, 
+        description="La fecha para la entrada del diario en formato YYYY-MM-DD. Debe ser inferida de términos como 'ayer', 'mañana', 'el 5 de julio', etc. Si no se especifica, se asume hoy."
+    )
+
+
 def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     Crea un agente de IA específicamente diseñado para trabajar con Logseq.
@@ -85,41 +105,48 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     agent = Agent(
         'openai:gpt-4.1-mini',
-        output_type=Union[AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone],
+        output_type=Union[SaveToJournal, AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone],
         system_prompt=(
+            f"La fecha de hoy es {date.today().isoformat()}. Úsala como referencia para cualquier cálculo de fechas relativas (ayer, mañana, etc.).\n\n"
             "Eres un asistente de IA especializado en Logseq, un sistema de toma de notas basado en bloques. "
             "Tu tarea es interpretar las solicitudes del usuario y convertirlas en acciones específicas de Logseq.\n\n"
-            "Tienes cinco herramientas disponibles:\n\n"
-            "1. **CreateTask**: Úsala cuando el usuario quiera crear una TAREA, un PENDIENTE o un TODO. Es la opción preferida para acciones.\n"
+            "Tienes seis herramientas disponibles:\n\n"
+            "1. **SaveToJournal**: Úsala cuando el usuario quiera anotar algo en su DIARIO para cualquier fecha. Es la opción PREFERIDA para cualquier cosa relacionada con \"hoy\", \"ayer\", \"mañana\", \"diario\" o \"anotar rápidamente\".\n"
+            "   - 'En mi diario: tuve una gran idea...' → SaveToJournal(content='Tuve una gran idea...')\n"
+            "   - 'Anota para hoy la tarea de llamar a Juan' → SaveToJournal(content='Llamar a Juan', is_task=True)\n"
+            "   - 'Anota en el diario de ayer: reunión importante' → SaveToJournal(content='Reunión importante', target_date='2025-06-29') (asumiendo que hoy es 30 de junio de 2025)\n"
+            "   - 'Recordatorio para mañana: comprar pan' → SaveToJournal(content='Comprar pan', is_task=True, target_date='2025-07-01') (asumiendo que hoy es 30 de junio de 2025)\n\n"
+            "2. **CreateTask**: Úsala cuando el usuario quiera crear una TAREA, un PENDIENTE o un TODO en una página específica.\n"
             "   - 'Añade la tarea de llamar a mamá' → CreateTask(page_title='Tareas', content='Llamar a mamá')\n"
             "   - 'TODO: Revisar el informe' → CreateTask(page_title='Tareas', content='Revisar el informe')\n"
-            "   - 'Recordarme comprar leche' → CreateTask(page_title='Tareas', content='Comprar leche')\n"
-            "   - 'Tengo que estudiar para el examen' → CreateTask(page_title='Tareas', content='Estudiar para el examen')\n\n"
-            "2. **MarkTaskAsDone**: Úsala cuando el usuario quiera MARCAR COMO HECHA, COMPLETAR o FINALIZAR una tarea existente.\n"
-            "   - 'Marca como hecha la tarea de comprar leche' → MarkTaskAsDone(page_title='Tareas', task_content='Comprar leche')\n"
-            "   - 'Ya he revisado el informe' → MarkTaskAsDone(page_title='Tareas', task_content='Revisar el informe')\n"
-            "   - 'Completé la tarea de llamar al médico' → MarkTaskAsDone(page_title='Tareas', task_content='Llamar al médico')\n"
-            "   - 'Terminé de estudiar para el examen' → MarkTaskAsDone(page_title='Tareas', task_content='Estudiar para el examen')\n\n"
-            "3. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas).\n"
-            "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
-            "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n"
-            "   - 'Anota este pensamiento...' → AppendToPage(page_title='Notas', content='[pensamiento]')\n\n"
-            "4. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
-            "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
-            "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
-            "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
-            "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
-            "5. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
+                           "   - 'Recordarme comprar leche' → CreateTask(page_title='Tareas', content='Comprar leche')\n"
+               "   - 'Tengo que estudiar para el examen' → CreateTask(page_title='Tareas', content='Estudiar para el examen')\n\n"
+               "3. **MarkTaskAsDone**: Úsala cuando el usuario quiera MARCAR COMO HECHA, COMPLETAR o FINALIZAR una tarea existente.\n"
+               "   - 'Marca como hecha la tarea de comprar leche' → MarkTaskAsDone(page_title='Tareas', task_content='Comprar leche')\n"
+               "   - 'Ya he revisado el informe' → MarkTaskAsDone(page_title='Tareas', task_content='Revisar el informe')\n"
+               "   - 'Completé la tarea de llamar al médico' → MarkTaskAsDone(page_title='Tareas', task_content='Llamar al médico')\n"
+               "   - 'Terminé de estudiar para el examen' → MarkTaskAsDone(page_title='Tareas', task_content='Estudiar para el examen')\n\n"
+               "4. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas) en una página específica.\n"
+               "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
+               "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n"
+               "   - 'Anota este pensamiento...' → AppendToPage(page_title='Notas', content='[pensamiento]')\n\n"
+               "5. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
+               "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
+               "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
+               "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
+               "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
+               "6. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
             "   - 'Busca mis notas sobre IA' → SearchInPages(query='IA')\n"
             "   - 'Encuentra dónde mencioné el \"Proyecto Apolo\"' → SearchInPages(query='Proyecto Apolo')\n"
             "   - '¿En qué páginas hablo de cocina?' → SearchInPages(query='cocina')\n"
             "   - 'Busca referencias a Python' → SearchInPages(query='Python')\n\n"
-            "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
-            "- Si quiere crear una TAREA/TODO/PENDIENTE → CreateTask\n"
-            "- Si quiere MARCAR COMO HECHA/COMPLETAR/FINALIZAR una tarea existente → MarkTaskAsDone\n"
-            "- Si quiere AGREGAR/ANOTAR contenido general → AppendToPage\n"
-            "- Si quiere VER/LEER una página específica → ReadPageContent\n"
-            "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n\n"
+                           "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
+               "- Si menciona HOY, AYER, MAÑANA, DIARIO, o quiere anotar rápidamente sin especificar página → SaveToJournal\n"
+               "- Si quiere crear una TAREA/TODO/PENDIENTE en una página específica → CreateTask\n"
+               "- Si quiere MARCAR COMO HECHA/COMPLETAR/FINALIZAR una tarea existente → MarkTaskAsDone\n"
+               "- Si quiere AGREGAR/ANOTAR contenido general en una página específica → AppendToPage\n"
+               "- Si quiere VER/LEER una página específica → ReadPageContent\n"
+               "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n\n"
             "Si el usuario no especifica una página, usa una página lógica basada en el contexto:\n"
             "- Tareas/TODOs → 'Tareas'\n"
             "- Ideas/pensamientos → 'Ideas'\n"
@@ -243,7 +270,38 @@ def main():
                     result = ai_agent.run_sync(prompt)
                     
                     # Verificar que el resultado sea del tipo esperado
-                    if isinstance(result.output, CreateTask):
+                    if isinstance(result.output, SaveToJournal):
+                        action = result.output
+                        # La descripción para la confirmación es más simple aquí
+                        action_type = "TAREA" if action.is_task else "NOTA"
+                        
+                        # Manejar la fecha objetivo
+                        if action.target_date:
+                            # Convertir la cadena YYYY-MM-DD en un objeto date
+                            try:
+                                target_date_obj = date.fromisoformat(action.target_date)
+                                date_description = f"para el {action.target_date}"
+                            except ValueError:
+                                print(f"❌ Error: Formato de fecha inválido '{action.target_date}'. Usando fecha de hoy.")
+                                target_date_obj = None
+                                date_description = "para HOY"
+                        else:
+                            target_date_obj = None
+                            date_description = "para HOY"
+                        
+                        description = f"Añadir {action_type} '{action.content}' al diario {date_description}"
+
+                        if confirm_action(description):
+                            logseq_manager.append_to_journal(
+                                content=action.content,
+                                is_task=action.is_task,
+                                target_date=target_date_obj
+                            )
+                            print(f"✅ ¡Hecho! Se añadió la anotación al diario {date_description}.")
+                        else:
+                            print("❌ Acción cancelada por el usuario.")
+                        
+                    elif isinstance(result.output, CreateTask):
                         action = result.output
                         description = f"Crear TAREA '{action.content}' en la página '{action.page_title}'"
                         

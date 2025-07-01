@@ -1,5 +1,6 @@
 import os
 import sys
+from datetime import date
 from dotenv import load_dotenv
 from src.logseq_manager import LogseqManager
 
@@ -524,6 +525,115 @@ def run_update_tests(manager):
     return update_tests_passed, total_update_tests
 
 
+def run_daily_journal_tests(manager):
+    """
+    Ejecuta pruebas para la función append_to_daily_journal del LogseqManager.
+    Incluye limpieza automática de archivos de prueba.
+    """
+    print("\n=== Pruebas de append_to_daily_journal ===")
+    
+    daily_tests_passed = 0
+    total_daily_tests = 4  # Total de pruebas de diario diario
+    
+    # Obtener la fecha actual para verificar el formato
+    today = date.today()
+    expected_journal_page = today.strftime("%Y_%m_%d")
+    
+    try:
+        print(f"📅 Fecha actual: {today} → Página esperada: '{expected_journal_page}'")
+        
+        # === PRUEBA 1: Añadir contenido normal al diario ===
+        print(f"📝 Prueba 1: Añadir contenido normal al diario...")
+        test_content_normal = "Reunión con el equipo de desarrollo"
+        
+        manager.append_to_daily_journal(test_content_normal)
+        
+        # Verificar que el contenido se añadió correctamente
+        journal_content = manager.read_page_content(expected_journal_page)
+        expected_block = f"- {test_content_normal}"
+        
+        if journal_content and expected_block in journal_content:
+            daily_tests_passed += 1
+            print(f"   ✅ ÉXITO: Contenido normal añadido correctamente")
+        else:
+            print(f"   ❌ FALLO: Contenido normal no encontrado")
+            print(f"   📄 Contenido actual: {repr(journal_content) if journal_content else 'None'}")
+        
+        # === PRUEBA 2: Añadir tarea al diario ===
+        print(f"📝 Prueba 2: Añadir tarea al diario...")
+        test_content_task = "Revisar documentación del proyecto"
+        
+        manager.append_to_daily_journal(test_content_task, is_task=True)
+        
+        # Verificar que la tarea se añadió correctamente
+        journal_content_after_task = manager.read_page_content(expected_journal_page)
+        expected_task_block = f"- TODO {test_content_task}"
+        
+        if journal_content_after_task and expected_task_block in journal_content_after_task:
+            daily_tests_passed += 1
+            print(f"   ✅ ÉXITO: Tarea añadida correctamente")
+        else:
+            print(f"   ❌ FALLO: Tarea no encontrada")
+            print(f"   📄 Contenido actual: {repr(journal_content_after_task) if journal_content_after_task else 'None'}")
+        
+        # === PRUEBA 3: Verificar formato de fecha correcto ===
+        print(f"📝 Prueba 3: Verificar formato de fecha correcto...")
+        # La página debe existir después de las pruebas anteriores
+        if manager.page_exists(expected_journal_page):
+            daily_tests_passed += 1
+            print(f"   ✅ ÉXITO: Página de diario '{expected_journal_page}' existe con formato correcto")
+        else:
+            print(f"   ❌ FALLO: Página de diario '{expected_journal_page}' no existe")
+        
+        # === PRUEBA 4: Verificar que ambos tipos de contenido coexisten ===
+        print(f"📝 Prueba 4: Verificar que ambos tipos de contenido coexisten...")
+        final_journal_content = manager.read_page_content(expected_journal_page)
+        
+        has_normal_content = expected_block in final_journal_content if final_journal_content else False
+        has_task_content = expected_task_block in final_journal_content if final_journal_content else False
+        
+        if has_normal_content and has_task_content:
+            daily_tests_passed += 1
+            print(f"   ✅ ÉXITO: Ambos tipos de contenido coexisten correctamente")
+            print(f"   📄 Contenido final del diario:")
+            if final_journal_content:
+                for line in final_journal_content.splitlines():
+                    print(f"     {line}")
+        else:
+            print(f"   ❌ FALLO: No coexisten ambos tipos de contenido")
+            print(f"   📄 Normal encontrado: {has_normal_content}")
+            print(f"   📄 Tarea encontrada: {has_task_content}")
+        
+    except Exception as e:
+        print(f"   ❌ ERROR durante las pruebas de diario diario: {e}")
+    
+    finally:
+        # === LIMPIEZA ===
+        print(f"\n🧹 Limpiando archivo de prueba del diario diario...")
+        
+        # Limpiar la página del diario de hoy si existe
+        if manager.page_exists(expected_journal_page):
+            try:
+                journal_page_path = manager._get_page_path(expected_journal_page)
+                os.remove(journal_page_path)
+                print(f"   ✅ Archivo eliminado: {journal_page_path}")
+            except Exception as e:
+                print(f"   ⚠️ No se pudo eliminar la página del diario: {e}")
+        else:
+            print(f"   ℹ️ No había página de diario para eliminar")
+    
+    # Imprimir resumen de pruebas de diario diario
+    print(f"\n=== RESUMEN DE PRUEBAS DE DIARIO DIARIO ===")
+    print(f"🎯 Pruebas de diario: {daily_tests_passed}/{total_daily_tests} pasaron")
+    
+    if daily_tests_passed == total_daily_tests:
+        print("🎉 ¡Todas las pruebas de diario diario pasaron!")
+    else:
+        print("⚠️ Algunas pruebas de diario diario fallaron.")
+    
+    return daily_tests_passed, total_daily_tests
+
+
 def main():
     """
     Script de prueba para verificar las funcionalidades de lectura y escritura del LogseqManager.
@@ -669,9 +779,12 @@ def main():
         # === PRUEBAS DE ACTUALIZACIÓN ===
         update_passed, update_total = run_update_tests(manager)
         
+        # === PRUEBAS DE DIARIO DIARIO ===
+        daily_passed, daily_total = run_daily_journal_tests(manager)
+        
         # === RESUMEN FINAL ===
-        total_all_tests = total_tests + write_total + block_total + update_total
-        total_all_passed = passed_tests + write_passed + block_passed + update_passed
+        total_all_tests = total_tests + write_total + block_total + update_total + daily_total
+        total_all_passed = passed_tests + write_passed + block_passed + update_passed + daily_passed
         
         print(f"\n{'='*50}")
         print(f"🎯 RESUMEN FINAL DE TODAS LAS PRUEBAS")
@@ -680,6 +793,7 @@ def main():
         print(f"📝 Pruebas de escritura: {write_passed}/{write_total}")
         print(f"🔍 Pruebas de bloques: {block_passed}/{block_total}")
         print(f"🔄 Pruebas de actualización: {update_passed}/{update_total}")
+        print(f"📅 Pruebas de diario diario: {daily_passed}/{daily_total}")
         print(f"🎯 TOTAL: {total_all_passed}/{total_all_tests} pruebas pasaron")
         
         if total_all_passed == total_all_tests:
@@ -687,7 +801,8 @@ def main():
             print("🏆 FASE 1 COMPLETADA: LogseqManager funciona perfectamente.")
             print("🔍 NUEVA FUNCIONALIDAD: find_block_in_page implementada y probada.")
             print("🔄 NUEVA FUNCIONALIDAD: update_block_in_page implementada y probada.")
-            print("🚀 Listo para avanzar con más funciones de manejo de bloques!")
+            print("📅 NUEVA FUNCIONALIDAD: append_to_daily_journal implementada y probada.")
+            print("🚀 Listo para avanzar con más funciones avanzadas!")
         else:
             print("⚠️ Algunas pruebas fallaron. Revisa la implementación o el grafo de Logseq.")
     
