@@ -420,3 +420,75 @@ class LogseqManager:
             # 7. Si ya existe, abrirlo en modo de adición y añadir el nuevo contenido con salto de línea inicial
             with open(journal_path, 'a', encoding='utf-8') as file:
                 file.write(f"\n{formatted_content}")
+
+    def delete_block_from_page(self, page_title: str, content_to_delete: str) -> bool:
+        """
+        Elimina un bloque específico de una página de Logseq.
+        
+        Realiza una operación de lectura-modificación-escritura para eliminar
+        exactamente el primer bloque que coincida con content_to_delete.
+        
+        Args:
+            page_title: Título de la página donde eliminar el bloque
+            content_to_delete: Contenido exacto del bloque a eliminar (sin el prefijo "- ")
+            
+        Returns:
+            True si encontró y eliminó el bloque exitosamente, False en caso contrario
+            
+        Example:
+            Si una página contiene "- A\n- B\n- C" y llamamos
+            delete_block_from_page(page, "B"), el contenido resultante será "- A\n- C".
+        """
+        # 1. Verificar que la página existe
+        if not self.page_exists(page_title):
+            return False
+        
+        # 2. Leer todo el contenido de la página línea por línea
+        content = self.read_page_content(page_title)
+        if not content:  # Maneja None o cadena vacía
+            return False
+        
+        # Dividir en líneas
+        lines = content.splitlines()
+        
+        # 3. Crear nueva lista para el contenido que se conservará y bandera para saber si se encontró
+        kept_lines = []
+        block_found = False
+        
+        # 4. Iterar sobre cada línea en la lista de líneas originales
+        for line in lines:
+            # a. Limpiar la línea actual (quitando "- " y espacios) para compararla con content_to_delete
+            cleaned_line = line.strip()
+            
+            # Si la línea comienza con "- " y aún no hemos encontrado el bloque a eliminar
+            if cleaned_line.startswith("- ") and not block_found:
+                block_text = cleaned_line[2:].strip()  # Remover "- " y espacios adicionales
+                
+                # b. Si la línea limpia coincide con content_to_delete Y block_found es False
+                if block_text == content_to_delete:
+                    # i. Marcar block_found = True
+                    block_found = True
+                    # ii. No hacer nada más (saltar esta línea, no añadirla a kept_lines)
+                    continue
+                else:
+                    # c. Si no coincide: añadir la línea original sin cambios a kept_lines
+                    kept_lines.append(line)
+            else:
+                # c. Si no es un bloque (no empieza con "- ") o ya encontramos el bloque, añadir línea original
+                kept_lines.append(line)
+        
+        # 5. Después del bucle
+        # a. Si block_found es False, no se eliminó nada
+        if not block_found:
+            return False
+        
+        # b. Si block_found es True:
+        # i. Unir kept_lines de nuevo en una sola cadena de texto, usando \n como separador
+        new_file_content = "\n".join(kept_lines)
+        
+        # ii. Obtener la ruta de la página y sobrescribir el archivo completo con el nuevo contenido
+        page_path = self._get_page_path(page_title)
+        page_path.write_text(new_file_content, encoding='utf-8')
+        
+        # iii. Devolver True para indicar que la eliminación fue exitosa
+        return True

@@ -93,6 +93,20 @@ class SaveToJournal(BaseModel):
     )
 
 
+class DeleteBlock(BaseModel):
+    """
+    Herramienta para eliminar un bloque de contenido específico de una página.
+    """
+    page_title: str = Field(
+        ..., 
+        description="El título de la página de la que se eliminará el bloque. Ej: 'Tareas', 'Ideas'"
+    )
+    content_to_delete: str = Field(
+        ..., 
+        description="El contenido exacto del bloque a eliminar, sin el prefijo '-'."
+    )
+
+
 def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     Crea un agente de IA específicamente diseñado para trabajar con Logseq.
@@ -105,12 +119,12 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     agent = Agent(
         'openai:gpt-4.1-mini',
-        output_type=Union[SaveToJournal, AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone],
+        output_type=Union[SaveToJournal, AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone, DeleteBlock],
         system_prompt=(
             f"La fecha de hoy es {date.today().isoformat()}. Úsala como referencia para cualquier cálculo de fechas relativas (ayer, mañana, etc.).\n\n"
             "Eres un asistente de IA especializado en Logseq, un sistema de toma de notas basado en bloques. "
             "Tu tarea es interpretar las solicitudes del usuario y convertirlas en acciones específicas de Logseq.\n\n"
-            "Tienes seis herramientas disponibles:\n\n"
+            "Tienes siete herramientas disponibles:\n\n"
             "1. **SaveToJournal**: Úsala cuando el usuario quiera anotar algo en su DIARIO para cualquier fecha. Es la opción PREFERIDA para cualquier cosa relacionada con \"hoy\", \"ayer\", \"mañana\", \"diario\" o \"anotar rápidamente\".\n"
             "   - 'En mi diario: tuve una gran idea...' → SaveToJournal(content='Tuve una gran idea...')\n"
             "   - 'Anota para hoy la tarea de llamar a Juan' → SaveToJournal(content='Llamar a Juan', is_task=True)\n"
@@ -119,34 +133,40 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
             "2. **CreateTask**: Úsala cuando el usuario quiera crear una TAREA, un PENDIENTE o un TODO en una página específica.\n"
             "   - 'Añade la tarea de llamar a mamá' → CreateTask(page_title='Tareas', content='Llamar a mamá')\n"
             "   - 'TODO: Revisar el informe' → CreateTask(page_title='Tareas', content='Revisar el informe')\n"
-                           "   - 'Recordarme comprar leche' → CreateTask(page_title='Tareas', content='Comprar leche')\n"
-               "   - 'Tengo que estudiar para el examen' → CreateTask(page_title='Tareas', content='Estudiar para el examen')\n\n"
-               "3. **MarkTaskAsDone**: Úsala cuando el usuario quiera MARCAR COMO HECHA, COMPLETAR o FINALIZAR una tarea existente.\n"
-               "   - 'Marca como hecha la tarea de comprar leche' → MarkTaskAsDone(page_title='Tareas', task_content='Comprar leche')\n"
-               "   - 'Ya he revisado el informe' → MarkTaskAsDone(page_title='Tareas', task_content='Revisar el informe')\n"
-               "   - 'Completé la tarea de llamar al médico' → MarkTaskAsDone(page_title='Tareas', task_content='Llamar al médico')\n"
-               "   - 'Terminé de estudiar para el examen' → MarkTaskAsDone(page_title='Tareas', task_content='Estudiar para el examen')\n\n"
-               "4. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas) en una página específica.\n"
-               "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
-               "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n"
-               "   - 'Anota este pensamiento...' → AppendToPage(page_title='Notas', content='[pensamiento]')\n\n"
-               "5. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
-               "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
-               "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
-               "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
-               "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
-               "6. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
+            "   - 'Recordarme comprar leche' → CreateTask(page_title='Tareas', content='Comprar leche')\n"
+            "   - 'Tengo que estudiar para el examen' → CreateTask(page_title='Tareas', content='Estudiar para el examen')\n\n"
+            "3. **MarkTaskAsDone**: Úsala cuando el usuario quiera MARCAR COMO HECHA, COMPLETAR o FINALIZAR una tarea existente.\n"
+            "   - 'Marca como hecha la tarea de comprar leche' → MarkTaskAsDone(page_title='Tareas', task_content='Comprar leche')\n"
+            "   - 'Ya he revisado el informe' → MarkTaskAsDone(page_title='Tareas', task_content='Revisar el informe')\n"
+            "   - 'Completé la tarea de llamar al médico' → MarkTaskAsDone(page_title='Tareas', task_content='Llamar al médico')\n"
+            "   - 'Terminé de estudiar para el examen' → MarkTaskAsDone(page_title='Tareas', task_content='Estudiar para el examen')\n\n"
+            "4. **AppendToPage**: Úsala cuando el usuario quiera AÑADIR, GUARDAR, ANOTAR contenido general (NO tareas) en una página específica.\n"
+            "   - 'Apunta que tengo reunión mañana' → AppendToPage(page_title='Agenda', content='Reunión mañana')\n"
+            "   - 'Guarda esta idea: usar IA para organizar notas' → AppendToPage(page_title='Ideas', content='Usar IA para organizar notas')\n"
+            "   - 'Anota este pensamiento...' → AppendToPage(page_title='Notas', content='[pensamiento]')\n\n"
+            "5. **ReadPageContent**: Úsala cuando el usuario quiera LEER, VER, MOSTRAR, REVISAR o preguntar QUÉ HAY en una página específica.\n"
+            "   - '¿Qué hay en mis Tareas?' → ReadPageContent(page_title='Tareas')\n"
+            "   - 'Muéstrame mis ideas' → ReadPageContent(page_title='Ideas')\n"
+            "   - 'Lee mi página de proyectos' → ReadPageContent(page_title='Proyectos')\n"
+            "   - '¿Qué tengo anotado en mi agenda?' → ReadPageContent(page_title='Agenda')\n\n"
+            "6. **SearchInPages**: Úsala cuando el usuario quiera BUSCAR, ENCONTRAR o preguntar sobre un tema en general a través de TODO el grafo.\n"
             "   - 'Busca mis notas sobre IA' → SearchInPages(query='IA')\n"
             "   - 'Encuentra dónde mencioné el \"Proyecto Apolo\"' → SearchInPages(query='Proyecto Apolo')\n"
             "   - '¿En qué páginas hablo de cocina?' → SearchInPages(query='cocina')\n"
             "   - 'Busca referencias a Python' → SearchInPages(query='Python')\n\n"
-                           "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
-               "- Si menciona HOY, AYER, MAÑANA, DIARIO, o quiere anotar rápidamente sin especificar página → SaveToJournal\n"
-               "- Si quiere crear una TAREA/TODO/PENDIENTE en una página específica → CreateTask\n"
-               "- Si quiere MARCAR COMO HECHA/COMPLETAR/FINALIZAR una tarea existente → MarkTaskAsDone\n"
-               "- Si quiere AGREGAR/ANOTAR contenido general en una página específica → AppendToPage\n"
-               "- Si quiere VER/LEER una página específica → ReadPageContent\n"
-               "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n\n"
+            "7. **DeleteBlock**: Úsala para BORRAR, ELIMINAR o QUITAR un bloque de contenido específico.\n"
+            "   - 'Borra la nota sobre la idea X' → DeleteBlock(page_title='Ideas', content_to_delete='La idea X')\n"
+            "   - 'Elimina la tarea completada de comprar pan' → DeleteBlock(page_title='Tareas', content_to_delete='DONE Comprar pan')\n"
+            "   - 'Quita ese comentario sobre el proyecto' → DeleteBlock(page_title='Notas', content_to_delete='Comentario sobre el proyecto')\n"
+            "   - 'Borra la reunión cancelada' → DeleteBlock(page_title='Agenda', content_to_delete='Reunión cancelada')\n\n"
+            "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
+            "- Si menciona HOY, AYER, MAÑANA, DIARIO, o quiere anotar rápidamente sin especificar página → SaveToJournal\n"
+            "- Si quiere crear una TAREA/TODO/PENDIENTE en una página específica → CreateTask\n"
+            "- Si quiere MARCAR COMO HECHA/COMPLETAR/FINALIZAR una tarea existente → MarkTaskAsDone\n"
+            "- Si quiere AGREGAR/ANOTAR contenido general en una página específica → AppendToPage\n"
+            "- Si quiere VER/LEER una página específica → ReadPageContent\n"
+            "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n"
+            "- Si quiere BORRAR/ELIMINAR/QUITAR un bloque específico → DeleteBlock\n\n"
             "Si el usuario no especifica una página, usa una página lógica basada en el contexto:\n"
             "- Tareas/TODOs → 'Tareas'\n"
             "- Ideas/pensamientos → 'Ideas'\n"
@@ -378,10 +398,28 @@ def main():
                                 print(f"  - {page_title}")
                         else:
                             print(f"❌ No encontré ninguna página que mencione '{search_action.query}'.")
+                    
+                    elif isinstance(result.output, DeleteBlock):
+                        action = result.output
+                        description = f"Eliminar el bloque '{action.content_to_delete}' de la página '{action.page_title}'"
+                        
+                        # ¡ACCIÓN DESTRUCTIVA! Proteger siempre con confirmación.
+                        if confirm_action(description):
+                            success = logseq_manager.delete_block_from_page(
+                                page_title=action.page_title,
+                                content_to_delete=action.content_to_delete
+                            )
+                            
+                            if success:
+                                print(f"🗑️ ¡Bloque eliminado con éxito!")
+                            else:
+                                print(f"❌ No pude encontrar el bloque '{action.content_to_delete}' en la página '{action.page_title}'.")
+                        else:
+                            print("❌ Acción cancelada por el usuario.")
                             
                     else:
                         print("❌ Lo siento, no pude entender ese comando. ¿Podrías reformularlo?")
-                        print("💡 Intenta con algo como: 'Crear tarea: [descripción]', 'Añade [nota] a [página]', '¿Qué hay en [página]?' o 'Busca [término]'")
+                        print("💡 Intenta con algo como: 'Crear tarea: [descripción]', 'Añade [nota] a [página]', '¿Qué hay en [página]?', 'Busca [término]' o 'Elimina [bloque] de [página]'")
                 
                 print()  # Línea en blanco para separar comandos
                 

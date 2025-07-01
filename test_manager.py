@@ -15,6 +15,9 @@ TEST_BLOCK_EMPTY_PAGE_NAME = "página-vacía-para-bloques"
 TEST_UPDATE_PAGE_NAME = "página-para-actualizar-bloques"
 TEST_UPDATE_EMPTY_PAGE_NAME = "página-vacía-para-actualizar"
 TEST_UPDATE_MULTIPLE_PAGE_NAME = "página-con-bloques-múltiples"
+TEST_DELETE_PAGE_NAME = "página-para-eliminar-bloques"
+TEST_DELETE_EMPTY_PAGE_NAME = "página-vacía-para-eliminar"
+TEST_DELETE_MULTIPLE_PAGE_NAME = "página-con-bloques-duplicados-eliminar"
 
 
 def run_write_tests(manager):
@@ -634,6 +637,211 @@ def run_daily_journal_tests(manager):
     return daily_tests_passed, total_daily_tests
 
 
+def run_delete_tests(manager):
+    """
+    Ejecuta pruebas para la función delete_block_from_page del LogseqManager.
+    Incluye limpieza automática de archivos de prueba.
+    """
+    print("\n=== Pruebas de delete_block_from_page ===")
+    
+    delete_tests_passed = 0
+    total_delete_tests = 7  # Total de pruebas de eliminación
+    
+    try:
+        # === PREPARACIÓN: Crear páginas de prueba ===
+        print(f"📝 Preparando páginas de prueba para eliminación de bloques...")
+        
+        # Página con varios bloques de prueba para eliminación
+        original_content = """- Tarea que se eliminará
+- Revisar documentación importante
+- Bloque a conservar uno
+- Bloque a conservar dos
+- Hacer ejercicio diario"""
+        
+        manager.create_page(TEST_DELETE_PAGE_NAME, content=original_content)
+        
+        # Página vacía para pruebas
+        manager.create_page(TEST_DELETE_EMPTY_PAGE_NAME, content="")
+        
+        # Página con bloques duplicados para probar eliminación selectiva (solo primera ocurrencia)
+        duplicate_content = """- Bloque duplicado
+- Otro bloque diferente  
+- Bloque duplicado
+- Bloque único final"""
+        
+        manager.create_page(TEST_DELETE_MULTIPLE_PAGE_NAME, content=duplicate_content)
+        
+        print(f"   ✅ Páginas de prueba creadas")
+        
+        # === PRUEBA 1: Eliminar bloque existente ===
+        print(f"🗑️ Prueba 1: Eliminar bloque existente 'Tarea que se eliminará'...")
+        success_1 = manager.delete_block_from_page(
+            TEST_DELETE_PAGE_NAME, 
+            "Tarea que se eliminará"
+        )
+        if success_1:
+            # Verificar que el contenido se eliminó correctamente
+            updated_content = manager.read_page_content(TEST_DELETE_PAGE_NAME)
+            if "Tarea que se eliminará" not in updated_content:
+                delete_tests_passed += 1
+                print(f"   ✅ ÉXITO: Bloque eliminado correctamente")
+            else:
+                print(f"   ❌ FALLO: El bloque todavía existe en el contenido")
+                print(f"   📄 Contenido actual: {repr(updated_content[:200])}")
+        else:
+            print(f"   ❌ FALLO: La función reportó que no se pudo eliminar el bloque")
+        
+        # === PRUEBA 2: Intentar eliminar bloque inexistente ===
+        print(f"🗑️ Prueba 2: Intentar eliminar bloque inexistente 'Bloque que no existe'...")
+        success_2 = manager.delete_block_from_page(
+            TEST_DELETE_PAGE_NAME, 
+            "Bloque que no existe"
+        )
+        if not success_2:
+            delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que no encontró el bloque")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para un bloque inexistente")
+        
+        # === PRUEBA 3: Eliminar en página inexistente ===
+        print(f"🗑️ Prueba 3: Intentar eliminar en página inexistente...")
+        success_3 = manager.delete_block_from_page(
+            "PÁGINA-QUE-NO-EXISTE", 
+            "Cualquier contenido"
+        )
+        if not success_3:
+            delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que la página no existe")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para una página inexistente")
+        
+        # === PRUEBA 4: Eliminar en página vacía ===
+        print(f"🗑️ Prueba 4: Intentar eliminar en página vacía...")
+        success_4 = manager.delete_block_from_page(
+            TEST_DELETE_EMPTY_PAGE_NAME, 
+            "Cualquier contenido"
+        )
+        if not success_4:
+            delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que no hay bloques en página vacía")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para una página vacía")
+        
+        # === PRUEBA 5: Verificar que solo elimina la primera ocurrencia ===
+        print(f"🗑️ Prueba 5: Verificar eliminación de solo la primera ocurrencia...")
+        success_5 = manager.delete_block_from_page(
+            TEST_DELETE_MULTIPLE_PAGE_NAME, 
+            "Bloque duplicado"
+        )
+        if success_5:
+            # Verificar que solo se eliminó la primera ocurrencia
+            multiple_content = manager.read_page_content(TEST_DELETE_MULTIPLE_PAGE_NAME)
+            lines = multiple_content.splitlines() if multiple_content else []
+            duplicate_count = sum(1 for line in lines if "Bloque duplicado" in line)
+            
+            if duplicate_count == 1:  # Debe quedar solo 1 (la segunda ocurrencia)
+                delete_tests_passed += 1
+                print(f"   ✅ ÉXITO: Solo eliminó la primera ocurrencia")
+            else:
+                print(f"   ❌ FALLO: Eliminó cantidad incorrecta. Duplicados restantes: {duplicate_count}")
+                print(f"   📄 Contenido: {repr(multiple_content)}")
+        else:
+            print(f"   ❌ FALLO: No pudo eliminar la primera ocurrencia")
+        
+        # === PRUEBA 6: Verificar que el resto del contenido se mantiene intacto ===
+        print(f"🗑️ Prueba 6: Verificar que el resto del contenido se mantiene intacto...")
+        # Leer el contenido actual de la página principal después de la primera eliminación
+        final_content = manager.read_page_content(TEST_DELETE_PAGE_NAME)
+        expected_lines = [
+            "- Revisar documentación importante",    # Estas deben mantenerse igual
+            "- Bloque a conservar uno",              
+            "- Bloque a conservar dos",              
+            "- Hacer ejercicio diario"               
+        ]
+        
+        content_lines = final_content.splitlines() if final_content else []
+        all_lines_correct = True
+        for i, expected_line in enumerate(expected_lines):
+            if i < len(content_lines) and content_lines[i] == expected_line:
+                continue
+            else:
+                all_lines_correct = False
+                break
+        
+        if all_lines_correct and len(content_lines) == len(expected_lines):
+            delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: El resto del contenido se mantuvo intacto")
+        else:
+            print(f"   ❌ FALLO: El contenido no se mantuvo como se esperaba")
+            print(f"   📄 Esperado: {expected_lines}")
+            print(f"   📄 Obtenido: {content_lines}")
+        
+        # === PRUEBA 7: Verificar ejemplo del enunciado (A, B, C) ===
+        print(f"🗑️ Prueba 7: Verificar ejemplo específico del enunciado...")
+        # Crear página con el ejemplo exacto: "- A\n- B\n- C"
+        manager.create_page("página-ejemplo-abc", content="- A\n- B\n- C")
+        
+        # Eliminar "B"
+        success_7 = manager.delete_block_from_page("página-ejemplo-abc", "B")
+        if success_7:
+            # Verificar que el resultado sea "- A\n- C"
+            abc_content = manager.read_page_content("página-ejemplo-abc")
+            expected_abc = "- A\n- C"
+            
+            if abc_content == expected_abc:
+                delete_tests_passed += 1
+                print(f"   ✅ ÉXITO: Ejemplo del enunciado funciona correctamente")
+                print(f"   📄 Resultado: {repr(abc_content)}")
+            else:
+                print(f"   ❌ FALLO: Ejemplo del enunciado no funcionó")
+                print(f"   📄 Esperado: {repr(expected_abc)}")
+                print(f"   📄 Obtenido: {repr(abc_content)}")
+        else:
+            print(f"   ❌ FALLO: No pudo eliminar 'B' del ejemplo")
+        
+    except Exception as e:
+        print(f"   ❌ ERROR durante las pruebas de eliminación: {e}")
+    
+    finally:
+        # === LIMPIEZA ===
+        print(f"\n🧹 Limpiando archivos de prueba de eliminación...")
+        
+        # Lista de páginas de prueba a limpiar
+        test_pages = [
+            TEST_DELETE_PAGE_NAME,
+            TEST_DELETE_EMPTY_PAGE_NAME,
+            TEST_DELETE_MULTIPLE_PAGE_NAME,
+            "página-ejemplo-abc"
+        ]
+        cleaned_count = 0
+        
+        for test_page in test_pages:
+            if manager.page_exists(test_page):
+                try:
+                    test_page_path = manager._get_page_path(test_page)
+                    os.remove(test_page_path)
+                    print(f"   ✅ Archivo eliminado: {test_page_path}")
+                    cleaned_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ No se pudo eliminar {test_page}: {e}")
+        
+        if cleaned_count == 0:
+            print(f"   ℹ️ No había archivos de prueba de eliminación para eliminar")
+        else:
+            print(f"   🎯 Total de archivos de prueba de eliminación eliminados: {cleaned_count}")
+    
+    # Imprimir resumen de pruebas de eliminación
+    print(f"\n=== RESUMEN DE PRUEBAS DE ELIMINACIÓN ===")
+    print(f"🎯 Pruebas de eliminación: {delete_tests_passed}/{total_delete_tests} pasaron")
+    
+    if delete_tests_passed == total_delete_tests:
+        print("🎉 ¡Todas las pruebas de eliminación pasaron!")
+    else:
+        print("⚠️ Algunas pruebas de eliminación fallaron.")
+    
+    return delete_tests_passed, total_delete_tests
+
+
 def main():
     """
     Script de prueba para verificar las funcionalidades de lectura y escritura del LogseqManager.
@@ -763,7 +971,7 @@ def main():
         else:
             print("❌ Test 6: read_page_content con página inexistente - FALLÓ")
         
-        print(f"\n🎯 Resultado final (pruebas de lectura): {passed_tests}/{total_tests} pruebas pasaron")
+        print(f"\n🎯 Resultado final (pruebas de lectura): {passed_tests}/{total_tests}")
         
         if passed_tests == total_tests:
             print("✅ ¡Todas las pruebas de lectura pasaron!")
@@ -782,9 +990,12 @@ def main():
         # === PRUEBAS DE DIARIO DIARIO ===
         daily_passed, daily_total = run_daily_journal_tests(manager)
         
+        # === PRUEBAS DE ELIMINACIÓN ===
+        delete_passed, delete_total = run_delete_tests(manager)
+        
         # === RESUMEN FINAL ===
-        total_all_tests = total_tests + write_total + block_total + update_total + daily_total
-        total_all_passed = passed_tests + write_passed + block_passed + update_passed + daily_passed
+        total_all_tests = total_tests + write_total + block_total + update_total + daily_total + delete_total
+        total_all_passed = passed_tests + write_passed + block_passed + update_passed + daily_passed + delete_passed
         
         print(f"\n{'='*50}")
         print(f"🎯 RESUMEN FINAL DE TODAS LAS PRUEBAS")
@@ -794,15 +1005,17 @@ def main():
         print(f"🔍 Pruebas de bloques: {block_passed}/{block_total}")
         print(f"🔄 Pruebas de actualización: {update_passed}/{update_total}")
         print(f"📅 Pruebas de diario diario: {daily_passed}/{daily_total}")
+        print(f"🗑️ Pruebas de eliminación: {delete_passed}/{delete_total}")
         print(f"🎯 TOTAL: {total_all_passed}/{total_all_tests} pruebas pasaron")
         
         if total_all_passed == total_all_tests:
             print("🎉 ¡ÉXITO TOTAL! Todas las pruebas pasaron.")
-            print("🏆 FASE 1 COMPLETADA: LogseqManager funciona perfectamente.")
-            print("🔍 NUEVA FUNCIONALIDAD: find_block_in_page implementada y probada.")
-            print("🔄 NUEVA FUNCIONALIDAD: update_block_in_page implementada y probada.")
-            print("📅 NUEVA FUNCIONALIDAD: append_to_daily_journal implementada y probada.")
-            print("🚀 Listo para avanzar con más funciones avanzadas!")
+            print("🏆 FASE 5 COMPLETADA: Herramienta de eliminación segura implementada.")
+            print("🔍 FUNCIONALIDAD: find_block_in_page - Buscar bloques específicos.")
+            print("🔄 FUNCIONALIDAD: update_block_in_page - Actualizar bloques existentes.")
+            print("📅 FUNCIONALIDAD: append_to_daily_journal - Añadir al diario diario.")
+            print("🗑️ NUEVA FUNCIONALIDAD: delete_block_from_page implementada y probada.")
+            print("🚀 LogseqManager completamente funcional con eliminación segura!")
         else:
             print("⚠️ Algunas pruebas fallaron. Revisa la implementación o el grafo de Logseq.")
     
