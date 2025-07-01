@@ -178,6 +178,21 @@ def initialize_agent():
     return logseq_manager, openai_client
 
 
+def confirm_action(action_description: str) -> bool:
+    """
+    Presenta una acción al usuario y pide confirmación (s/n).
+    
+    Args:
+        action_description: Descripción clara de la acción a realizar
+        
+    Returns:
+        bool: True si el usuario confirma (s), False en caso contrario
+    """
+    print(f"\n🤔 Acción propuesta: {action_description}")
+    response = input("   ➡️ ¿Confirmar? (s/n): ").lower().strip()
+    return response == 's'
+
+
 def main():
     """
     Punto de entrada principal del agente de IA.
@@ -229,46 +244,60 @@ def main():
                     
                     # Verificar que el resultado sea del tipo esperado
                     if isinstance(result.output, CreateTask):
-                        task_action = result.output
-                        # Formatear el contenido como una tarea TODO
-                        task_content = f"TODO {task_action.content}"
-                        logseq_manager.append_to_page(
-                            page_title=task_action.page_title,
-                            content=task_content
-                        )
-                        print(f"✅ ¡Tarea creada! Se añadió '{task_content}' a la página '{task_action.page_title}'.")
+                        action = result.output
+                        description = f"Crear TAREA '{action.content}' en la página '{action.page_title}'"
+                        
+                        if confirm_action(description):
+                            # Formatear el contenido como una tarea TODO
+                            task_content = f"TODO {action.content}"
+                            logseq_manager.append_to_page(
+                                page_title=action.page_title,
+                                content=task_content
+                            )
+                            print(f"✅ ¡Tarea creada! Se añadió '{task_content}' a la página '{action.page_title}'.")
+                        else:
+                            print("❌ Acción cancelada por el usuario.")
                         
                     elif isinstance(result.output, MarkTaskAsDone):
                         action = result.output
-                        print(f"✅ Marcando tarea como hecha en '{action.page_title}'...")
+                        description = f"Marcar como HECHA la tarea '{action.task_content}' en la página '{action.page_title}'"
                         
-                        # Construir el contenido viejo y nuevo del bloque
-                        old_block = f"TODO {action.task_content}"
-                        new_block = f"DONE {action.task_content}"
-                        
-                        # Llamar a nuestro nuevo método del manager
-                        success = logseq_manager.update_block_in_page(
-                            action.page_title,
-                            old_block,
-                            new_block
-                        )
-                        
-                        if success:
-                            print(f"🎉 ¡Tarea completada! Se actualizó '{action.task_content}' en '{action.page_title}'.")
+                        if confirm_action(description):
+                            print(f"✅ Marcando tarea como hecha en '{action.page_title}'...")
+                            
+                            # Construir el contenido viejo y nuevo del bloque
+                            old_block = f"TODO {action.task_content}"
+                            new_block = f"DONE {action.task_content}"
+                            
+                            # Llamar a nuestro nuevo método del manager
+                            success = logseq_manager.update_block_in_page(
+                                action.page_title,
+                                old_block,
+                                new_block
+                            )
+                            
+                            if success:
+                                print(f"🎉 ¡Tarea completada! Se actualizó '{action.task_content}' en '{action.page_title}'.")
+                            else:
+                                print(f"❌ No pude encontrar la tarea 'TODO {action.task_content}' en la página '{action.page_title}'.")
                         else:
-                            print(f"❌ No pude encontrar la tarea 'TODO {action.task_content}' en la página '{action.page_title}'.")
+                            print("❌ Acción cancelada por el usuario.")
                         
                     elif isinstance(result.output, AppendToPage):
-                        append_action = result.output
+                        action = result.output
+                        description = f"Añadir CONTENIDO '{action.content}' a la página '{action.page_title}'"
                         
-                        # Ejecutar la acción usando nuestro LogseqManager
-                        logseq_manager.append_to_page(
-                            page_title=append_action.page_title, 
-                            content=append_action.content
-                        )
-                        
-                        # Confirmar éxito
-                        print(f"✅ ¡Hecho! Se añadió '{append_action.content}' a la página '{append_action.page_title}'.")
+                        if confirm_action(description):
+                            # Ejecutar la acción usando nuestro LogseqManager
+                            logseq_manager.append_to_page(
+                                page_title=action.page_title, 
+                                content=action.content
+                            )
+                            
+                            # Confirmar éxito
+                            print(f"✅ ¡Hecho! Se añadió '{action.content}' a la página '{action.page_title}'.")
+                        else:
+                            print("❌ Acción cancelada por el usuario.")
                         
                     elif isinstance(result.output, ReadPageContent):
                         read_action = result.output
