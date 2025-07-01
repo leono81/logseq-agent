@@ -421,16 +421,17 @@ class LogseqManager:
             with open(journal_path, 'a', encoding='utf-8') as file:
                 file.write(f"\n{formatted_content}")
 
-    def delete_block_from_page(self, page_title: str, content_to_delete: str) -> bool:
+    def delete_block_from_page(self, page_title: str, content_to_delete: str, is_journal: bool = False) -> bool:
         """
-        Elimina un bloque específico de una página de Logseq.
+        Elimina un bloque específico de una página de Logseq o de un diario.
         
         Realiza una operación de lectura-modificación-escritura para eliminar
         exactamente el primer bloque que coincida con content_to_delete.
         
         Args:
-            page_title: Título de la página donde eliminar el bloque
+            page_title: Título de la página donde eliminar el bloque, o nombre del archivo de diario (ej: "2025_01_15")
             content_to_delete: Contenido exacto del bloque a eliminar (sin el prefijo "- ")
+            is_journal: Si True, busca en el directorio journals/ en lugar de pages/
             
         Returns:
             True si encontró y eliminó el bloque exitosamente, False en caso contrario
@@ -438,13 +439,27 @@ class LogseqManager:
         Example:
             Si una página contiene "- A\n- B\n- C" y llamamos
             delete_block_from_page(page, "B"), el contenido resultante será "- A\n- C".
+            
+            Para diarios:
+            delete_block_from_page("2025_01_15", "Reunión cancelada", is_journal=True)
         """
-        # 1. Verificar que la página existe
-        if not self.page_exists(page_title):
-            return False
+        # 1. Determinar la ruta correcta y verificar que el archivo existe
+        if is_journal:
+            # Para diarios: construir ruta directamente y verificar existencia
+            file_path = self.journals_path / f"{page_title}.md"
+            if not file_path.exists() or not file_path.is_file():
+                return False
+        else:
+            # Para páginas normales: usar métodos existentes
+            if not self.page_exists(page_title):
+                return False
+            file_path = self._get_page_path(page_title)
         
-        # 2. Leer todo el contenido de la página línea por línea
-        content = self.read_page_content(page_title)
+        # 2. Leer todo el contenido del archivo línea por línea
+        try:
+            content = file_path.read_text(encoding='utf-8')
+        except (IOError, OSError):
+            return False
         if not content:  # Maneja None o cadena vacía
             return False
         
@@ -486,9 +501,8 @@ class LogseqManager:
         # i. Unir kept_lines de nuevo en una sola cadena de texto, usando \n como separador
         new_file_content = "\n".join(kept_lines)
         
-        # ii. Obtener la ruta de la página y sobrescribir el archivo completo con el nuevo contenido
-        page_path = self._get_page_path(page_title)
-        page_path.write_text(new_file_content, encoding='utf-8')
+        # ii. Sobrescribir el archivo completo con el nuevo contenido
+        file_path.write_text(new_file_content, encoding='utf-8')
         
         # iii. Devolver True para indicar que la eliminación fue exitosa
         return True

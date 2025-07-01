@@ -93,9 +93,11 @@ class SaveToJournal(BaseModel):
     )
 
 
-class DeleteBlock(BaseModel):
+class DeleteBlockFromPage(BaseModel):
     """
-    Herramienta para eliminar un bloque de contenido específico de una página.
+    Herramienta para eliminar un bloque de contenido específico de una página normal de Logseq.
+    
+    Úsala cuando el usuario quiera borrar contenido de una página específica (no un diario).
     """
     page_title: str = Field(
         ..., 
@@ -104,6 +106,22 @@ class DeleteBlock(BaseModel):
     content_to_delete: str = Field(
         ..., 
         description="El contenido exacto del bloque a eliminar, sin el prefijo '-'."
+    )
+
+
+class DeleteBlockFromJournal(BaseModel):
+    """
+    Herramienta para eliminar un bloque de contenido específico de una página de diario.
+    
+    Úsala cuando el usuario quiera borrar contenido de su diario (hoy, ayer, una fecha específica).
+    """
+    content_to_delete: str = Field(
+        ..., 
+        description="El contenido exacto del bloque a eliminar, sin el prefijo '-'."
+    )
+    target_date: typing.Optional[str] = Field(
+        None, 
+        description="La fecha del diario en formato YYYY-MM-DD. Debe ser inferida de términos como 'ayer', 'mañana', 'el 5 de julio', etc. Si no se especifica, se asume hoy."
     )
 
 
@@ -119,12 +137,12 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
     """
     agent = Agent(
         'openai:gpt-4.1-mini',
-        output_type=Union[SaveToJournal, AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone, DeleteBlock],
+        output_type=Union[SaveToJournal, AppendToPage, ReadPageContent, SearchInPages, CreateTask, MarkTaskAsDone, DeleteBlockFromPage, DeleteBlockFromJournal],
         system_prompt=(
             f"La fecha de hoy es {date.today().isoformat()}. Úsala como referencia para cualquier cálculo de fechas relativas (ayer, mañana, etc.).\n\n"
             "Eres un asistente de IA especializado en Logseq, un sistema de toma de notas basado en bloques. "
             "Tu tarea es interpretar las solicitudes del usuario y convertirlas en acciones específicas de Logseq.\n\n"
-            "Tienes siete herramientas disponibles:\n\n"
+            "Tienes ocho herramientas disponibles:\n\n"
             "1. **SaveToJournal**: Úsala cuando el usuario quiera anotar algo en su DIARIO para cualquier fecha. Es la opción PREFERIDA para cualquier cosa relacionada con \"hoy\", \"ayer\", \"mañana\", \"diario\" o \"anotar rápidamente\".\n"
             "   - 'En mi diario: tuve una gran idea...' → SaveToJournal(content='Tuve una gran idea...')\n"
             "   - 'Anota para hoy la tarea de llamar a Juan' → SaveToJournal(content='Llamar a Juan', is_task=True)\n"
@@ -154,11 +172,16 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
             "   - 'Encuentra dónde mencioné el \"Proyecto Apolo\"' → SearchInPages(query='Proyecto Apolo')\n"
             "   - '¿En qué páginas hablo de cocina?' → SearchInPages(query='cocina')\n"
             "   - 'Busca referencias a Python' → SearchInPages(query='Python')\n\n"
-            "7. **DeleteBlock**: Úsala para BORRAR, ELIMINAR o QUITAR un bloque de contenido específico.\n"
-            "   - 'Borra la nota sobre la idea X' → DeleteBlock(page_title='Ideas', content_to_delete='La idea X')\n"
-            "   - 'Elimina la tarea completada de comprar pan' → DeleteBlock(page_title='Tareas', content_to_delete='DONE Comprar pan')\n"
-            "   - 'Quita ese comentario sobre el proyecto' → DeleteBlock(page_title='Notas', content_to_delete='Comentario sobre el proyecto')\n"
-            "   - 'Borra la reunión cancelada' → DeleteBlock(page_title='Agenda', content_to_delete='Reunión cancelada')\n\n"
+            "7. **DeleteBlockFromPage**: Úsala para BORRAR un bloque de una PÁGINA ESPECÍFICA (no un diario).\n"
+            "   - 'En mi página de Ideas, borra la nota sobre X' → DeleteBlockFromPage(page_title='Ideas', content_to_delete='nota sobre X')\n"
+            "   - 'Elimina la tarea completada de comprar pan' → DeleteBlockFromPage(page_title='Tareas', content_to_delete='DONE Comprar pan')\n"
+            "   - 'Quita ese comentario de mi página de Notas' → DeleteBlockFromPage(page_title='Notas', content_to_delete='comentario...')\n"
+            "   - 'Borra la reunión cancelada de mi Agenda' → DeleteBlockFromPage(page_title='Agenda', content_to_delete='reunión cancelada')\n\n"
+            "8. **DeleteBlockFromJournal**: Úsala para BORRAR un bloque de una PÁGINA DE DIARIO (hoy, ayer, una fecha...).\n"
+            "   - 'Borra la reunión de las 3pm de hoy' → DeleteBlockFromJournal(content_to_delete='Reunión a las 3pm')\n"
+            "   - 'Elimina la nota de ayer sobre Y' → DeleteBlockFromJournal(content_to_delete='nota sobre Y', target_date='2025-06-29')\n"
+            "   - 'Quita esa tarea del diario de mañana' → DeleteBlockFromJournal(content_to_delete='tarea...', target_date='2025-07-01')\n"
+            "   - 'Borra la entrada del diario del 5 de julio' → DeleteBlockFromJournal(content_to_delete='entrada...', target_date='2025-07-05')\n\n"
             "**IMPORTANTE:** Analiza cuidadosamente la intención del usuario:\n"
             "- Si menciona HOY, AYER, MAÑANA, DIARIO, o quiere anotar rápidamente sin especificar página → SaveToJournal\n"
             "- Si quiere crear una TAREA/TODO/PENDIENTE en una página específica → CreateTask\n"
@@ -166,7 +189,8 @@ def create_logseq_agent(openai_api_key: str) -> Agent:
             "- Si quiere AGREGAR/ANOTAR contenido general en una página específica → AppendToPage\n"
             "- Si quiere VER/LEER una página específica → ReadPageContent\n"
             "- Si quiere BUSCAR/ENCONTRAR en todo el grafo → SearchInPages\n"
-            "- Si quiere BORRAR/ELIMINAR/QUITAR un bloque específico → DeleteBlock\n\n"
+            "- Si quiere BORRAR/ELIMINAR/QUITAR un bloque de una página específica → DeleteBlockFromPage\n"
+            "- Si quiere BORRAR/ELIMINAR/QUITAR un bloque del diario (hoy, ayer, fecha específica) → DeleteBlockFromJournal\n"
             "Si el usuario no especifica una página, usa una página lógica basada en el contexto:\n"
             "- Tareas/TODOs → 'Tareas'\n"
             "- Ideas/pensamientos → 'Ideas'\n"
@@ -399,21 +423,59 @@ def main():
                         else:
                             print(f"❌ No encontré ninguna página que mencione '{search_action.query}'.")
                     
-                    elif isinstance(result.output, DeleteBlock):
+                    elif isinstance(result.output, DeleteBlockFromPage):
                         action = result.output
-                        description = f"Eliminar el bloque '{action.content_to_delete}' de la página '{action.page_title}'"
+                        description = f"Eliminar bloque '{action.content_to_delete}' de la página '{action.page_title}'"
                         
                         # ¡ACCIÓN DESTRUCTIVA! Proteger siempre con confirmación.
                         if confirm_action(description):
                             success = logseq_manager.delete_block_from_page(
                                 page_title=action.page_title,
-                                content_to_delete=action.content_to_delete
+                                content_to_delete=action.content_to_delete,
+                                is_journal=False
                             )
                             
                             if success:
-                                print(f"🗑️ ¡Bloque eliminado con éxito!")
+                                print(f"🗑️ ¡Bloque eliminado con éxito de la página '{action.page_title}'!")
                             else:
                                 print(f"❌ No pude encontrar el bloque '{action.content_to_delete}' en la página '{action.page_title}'.")
+                        else:
+                            print("❌ Acción cancelada por el usuario.")
+                            
+                    elif isinstance(result.output, DeleteBlockFromJournal):
+                        action = result.output
+                        
+                        # Manejar la fecha objetivo para el diario
+                        if action.target_date:
+                            # Convertir la cadena YYYY-MM-DD en un objeto date
+                            try:
+                                target_date_obj = date.fromisoformat(action.target_date)
+                                journal_page_title = target_date_obj.strftime("%Y_%m_%d")
+                                date_description = f"del diario del {action.target_date}"
+                            except ValueError:
+                                print(f"❌ Error: Formato de fecha inválido '{action.target_date}'. Usando fecha de hoy.")
+                                target_date_obj = date.today()
+                                journal_page_title = target_date_obj.strftime("%Y_%m_%d")
+                                date_description = "del diario de HOY"
+                        else:
+                            target_date_obj = date.today()
+                            journal_page_title = target_date_obj.strftime("%Y_%m_%d")
+                            date_description = "del diario de HOY"
+                        
+                        description = f"Eliminar bloque '{action.content_to_delete}' {date_description}"
+                        
+                        # ¡ACCIÓN DESTRUCTIVA! Proteger siempre con confirmación.
+                        if confirm_action(description):
+                            success = logseq_manager.delete_block_from_page(
+                                page_title=journal_page_title,
+                                content_to_delete=action.content_to_delete,
+                                is_journal=True
+                            )
+                            
+                            if success:
+                                print(f"🗑️ ¡Bloque eliminado con éxito {date_description}!")
+                            else:
+                                print(f"❌ No pude encontrar el bloque '{action.content_to_delete}' {date_description}.")
                         else:
                             print("❌ Acción cancelada por el usuario.")
                             

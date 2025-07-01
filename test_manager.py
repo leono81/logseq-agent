@@ -18,6 +18,8 @@ TEST_UPDATE_MULTIPLE_PAGE_NAME = "página-con-bloques-múltiples"
 TEST_DELETE_PAGE_NAME = "página-para-eliminar-bloques"
 TEST_DELETE_EMPTY_PAGE_NAME = "página-vacía-para-eliminar"
 TEST_DELETE_MULTIPLE_PAGE_NAME = "página-con-bloques-duplicados-eliminar"
+TEST_DELETE_JOURNAL_NAME = "2025_01_15"  # Journal de prueba para tests de eliminación
+TEST_DELETE_JOURNAL_EMPTY_NAME = "2025_01_16"  # Journal vacío para tests
 
 
 def run_write_tests(manager):
@@ -842,6 +844,186 @@ def run_delete_tests(manager):
     return delete_tests_passed, total_delete_tests
 
 
+def run_delete_journal_tests(manager):
+    """
+    Ejecuta pruebas para la nueva funcionalidad de eliminación de bloques en journals
+    del método delete_block_from_page con parámetro is_journal=True.
+    Incluye limpieza automática de archivos de prueba.
+    """
+    print("\n=== Pruebas de delete_block_from_page (Journals) ===")
+    
+    journal_delete_tests_passed = 0
+    total_journal_delete_tests = 6  # Total de pruebas de eliminación en journals
+    
+    try:
+        # === PREPARACIÓN: Crear archivos de journal de prueba ===
+        print(f"📅 Preparando archivos de journal de prueba...")
+        
+        # Journal con varios bloques de prueba para eliminación
+        journal_content = """- Reunión con cliente cancelada
+- Revisar propuesta de proyecto
+- Llamar a proveedor
+- Tarea que se eliminará de journal
+- Hacer ejercicio por la tarde"""
+        
+        # Crear archivo de journal directamente
+        journal_path = manager.journals_path / f"{TEST_DELETE_JOURNAL_NAME}.md"
+        journal_path.write_text(journal_content, encoding='utf-8')
+        
+        # Journal vacío para pruebas
+        empty_journal_path = manager.journals_path / f"{TEST_DELETE_JOURNAL_EMPTY_NAME}.md"
+        empty_journal_path.write_text("", encoding='utf-8')
+        
+        print(f"   ✅ Archivos de journal de prueba creados")
+        
+        # === PRUEBA 1: Eliminar bloque existente en journal ===
+        print(f"🗑️ Prueba 1: Eliminar bloque existente en journal 'Tarea que se eliminará de journal'...")
+        success_1 = manager.delete_block_from_page(
+            TEST_DELETE_JOURNAL_NAME, 
+            "Tarea que se eliminará de journal",
+            is_journal=True
+        )
+        if success_1:
+            # Verificar que el contenido se eliminó correctamente del journal
+            journal_content_after = journal_path.read_text(encoding='utf-8')
+            if "Tarea que se eliminará de journal" not in journal_content_after:
+                journal_delete_tests_passed += 1
+                print(f"   ✅ ÉXITO: Bloque eliminado correctamente del journal")
+            else:
+                print(f"   ❌ FALLO: El bloque todavía existe en el journal")
+                print(f"   📄 Contenido actual: {repr(journal_content_after[:200])}")
+        else:
+            print(f"   ❌ FALLO: La función reportó que no se pudo eliminar el bloque del journal")
+        
+        # === PRUEBA 2: Intentar eliminar bloque inexistente en journal ===
+        print(f"🗑️ Prueba 2: Intentar eliminar bloque inexistente en journal...")
+        success_2 = manager.delete_block_from_page(
+            TEST_DELETE_JOURNAL_NAME, 
+            "Bloque que no existe en journal",
+            is_journal=True
+        )
+        if not success_2:
+            journal_delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que no encontró el bloque en journal")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para un bloque inexistente en journal")
+        
+        # === PRUEBA 3: Eliminar en journal inexistente ===
+        print(f"🗑️ Prueba 3: Intentar eliminar en journal inexistente...")
+        success_3 = manager.delete_block_from_page(
+            "2025_12_99",  # Fecha inválida/inexistente
+            "Cualquier contenido",
+            is_journal=True
+        )
+        if not success_3:
+            journal_delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que el journal no existe")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para un journal inexistente")
+        
+        # === PRUEBA 4: Eliminar en journal vacío ===
+        print(f"🗑️ Prueba 4: Intentar eliminar en journal vacío...")
+        success_4 = manager.delete_block_from_page(
+            TEST_DELETE_JOURNAL_EMPTY_NAME, 
+            "Cualquier contenido",
+            is_journal=True
+        )
+        if not success_4:
+            journal_delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: Correctamente reportó que no hay bloques en journal vacío")
+        else:
+            print(f"   ❌ FALLO: Reportó éxito para un journal vacío")
+        
+        # === PRUEBA 5: Verificar compatibilidad hacia atrás (páginas normales) ===
+        print(f"🗑️ Prueba 5: Verificar compatibilidad hacia atrás...")
+        # Crear una página normal para verificar que sigue funcionando igual
+        test_page_name = "página-test-compatibilidad"
+        manager.create_page(test_page_name, content="- Bloque de prueba\n- Otro bloque")
+        
+        # Usar el método sin is_journal (debe funcionar igual que antes)
+        success_5 = manager.delete_block_from_page(test_page_name, "Bloque de prueba")
+        if success_5:
+            # Verificar que se eliminó de la página normal
+            page_content = manager.read_page_content(test_page_name)
+            if "Bloque de prueba" not in page_content:
+                journal_delete_tests_passed += 1
+                print(f"   ✅ ÉXITO: Compatibilidad hacia atrás funciona correctamente")
+            else:
+                print(f"   ❌ FALLO: Compatibilidad hacia atrás no funciona")
+        else:
+            print(f"   ❌ FALLO: Compatibilidad hacia atrás falló")
+        
+        # === PRUEBA 6: Verificar que el resto del contenido del journal se mantiene ===
+        print(f"🗑️ Prueba 6: Verificar que el resto del contenido del journal se mantiene intacto...")
+        final_journal_content = journal_path.read_text(encoding='utf-8')
+        expected_lines = [
+            "- Reunión con cliente cancelada",
+            "- Revisar propuesta de proyecto", 
+            "- Llamar a proveedor",
+            "- Hacer ejercicio por la tarde"
+        ]
+        
+        journal_lines = final_journal_content.splitlines() if final_journal_content else []
+        all_lines_correct = True
+        for i, expected_line in enumerate(expected_lines):
+            if i < len(journal_lines) and journal_lines[i] == expected_line:
+                continue
+            else:
+                all_lines_correct = False
+                break
+        
+        if all_lines_correct and len(journal_lines) == len(expected_lines):
+            journal_delete_tests_passed += 1
+            print(f"   ✅ ÉXITO: El resto del contenido del journal se mantuvo intacto")
+        else:
+            print(f"   ❌ FALLO: El contenido del journal no se mantuvo como se esperaba")
+            print(f"   📄 Esperado: {expected_lines}")
+            print(f"   📄 Obtenido: {journal_lines}")
+        
+    except Exception as e:
+        print(f"   ❌ ERROR durante las pruebas de eliminación en journals: {e}")
+    
+    finally:
+        # === LIMPIEZA ===
+        print(f"\n🧹 Limpiando archivos de prueba de journals...")
+        
+        # Lista de archivos de journal y páginas de prueba a limpiar
+        test_files = [
+            (manager.journals_path / f"{TEST_DELETE_JOURNAL_NAME}.md", "journal"),
+            (manager.journals_path / f"{TEST_DELETE_JOURNAL_EMPTY_NAME}.md", "journal"),
+        ]
+        
+        # Limpiar página de compatibilidad
+        if manager.page_exists("página-test-compatibilidad"):
+            test_files.append((manager._get_page_path("página-test-compatibilidad"), "página"))
+        
+        cleaned_count = 0
+        for file_path, file_type in test_files:
+            if file_path.exists():
+                try:
+                    file_path.unlink()
+                    print(f"   ✅ Archivo de {file_type} eliminado: {file_path}")
+                    cleaned_count += 1
+                except Exception as e:
+                    print(f"   ⚠️ No se pudo eliminar {file_path}: {e}")
+        
+        if cleaned_count == 0:
+            print(f"   ℹ️ No había archivos de prueba de journals para eliminar")
+        else:
+            print(f"   🎯 Total de archivos de prueba de journals eliminados: {cleaned_count}")
+    
+    # Imprimir resumen de pruebas de eliminación en journals
+    print(f"\n=== RESUMEN DE PRUEBAS DE ELIMINACIÓN EN JOURNALS ===")
+    print(f"🎯 Pruebas de eliminación en journals: {journal_delete_tests_passed}/{total_journal_delete_tests} pasaron")
+    
+    if journal_delete_tests_passed == total_journal_delete_tests:
+        print("🎉 ¡Todas las pruebas de eliminación en journals pasaron!")
+    else:
+        print("⚠️ Algunas pruebas de eliminación en journals fallaron.")
+    
+    return journal_delete_tests_passed, total_journal_delete_tests
+
+
 def main():
     """
     Script de prueba para verificar las funcionalidades de lectura y escritura del LogseqManager.
@@ -993,9 +1175,12 @@ def main():
         # === PRUEBAS DE ELIMINACIÓN ===
         delete_passed, delete_total = run_delete_tests(manager)
         
+        # === PRUEBAS DE ELIMINACIÓN EN JOURNALS ===
+        journal_delete_passed, journal_delete_total = run_delete_journal_tests(manager)
+        
         # === RESUMEN FINAL ===
-        total_all_tests = total_tests + write_total + block_total + update_total + daily_total + delete_total
-        total_all_passed = passed_tests + write_passed + block_passed + update_passed + daily_passed + delete_passed
+        total_all_tests = total_tests + write_total + block_total + update_total + daily_total + delete_total + journal_delete_total
+        total_all_passed = passed_tests + write_passed + block_passed + update_passed + daily_passed + delete_passed + journal_delete_passed
         
         print(f"\n{'='*50}")
         print(f"🎯 RESUMEN FINAL DE TODAS LAS PRUEBAS")
@@ -1006,6 +1191,7 @@ def main():
         print(f"🔄 Pruebas de actualización: {update_passed}/{update_total}")
         print(f"📅 Pruebas de diario diario: {daily_passed}/{daily_total}")
         print(f"🗑️ Pruebas de eliminación: {delete_passed}/{delete_total}")
+        print(f"📅 Pruebas de eliminación en journals: {journal_delete_passed}/{journal_delete_total}")
         print(f"🎯 TOTAL: {total_all_passed}/{total_all_tests} pruebas pasaron")
         
         if total_all_passed == total_all_tests:
